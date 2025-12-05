@@ -811,6 +811,32 @@ body::before {
     border-color: var(--accent-primary);
 }
 
+/* Step Controls */
+.step-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    flex-wrap: wrap;
+    padding: var(--spacing-xs) 0;
+}
+
+.step-btn {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    padding: 4px 6px;
+    min-width: auto;
+}
+
+.step-btn.frame-btn {
+    color: var(--accent-primary);
+}
+
+.fps-select {
+    display: flex;
+    align-items: center;
+}
+
 /* Playback Controls */
 .playback-controls {
     justify-content: center;

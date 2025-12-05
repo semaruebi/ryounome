@@ -95,21 +95,38 @@
                             <label class="btn btn-secondary file-input-label">
                                 📁 <input type="file" id="playerAFile" accept="video/*" hidden>
                             </label>
+                            <div class="fps-select">
+                                <select id="playerAFps" class="speed-select">
+                                    <option value="30">30fps</option>
+                                    <option value="60" selected>60fps</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- Step Controls -->
+                        <div class="control-row step-controls">
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-60">-1m</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-30">-30s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-10">-10s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-5">-5s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-1">-1s</button>
+                            <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="-10f">-10f</button>
+                            <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="-1f">-1f</button>
+                            <button class="btn btn-icon btn-large btn-primary" id="playerAPlayPause">
+                                <span class="play-icon">▶️</span>
+                            </button>
+                            <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="+1f">+1f</button>
+                            <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="+10f">+10f</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="1">+1s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="5">+5s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="10">+10s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="30">+30s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="60">+1m</button>
                         </div>
                         <div class="control-row playback-controls">
                             <div class="start-position">
                                 <span>開始:</span>
                                 <input type="text" id="playerAStartTime" class="start-position-input" value="0:00">
                                 <button class="btn btn-small btn-ghost" id="playerASetStart">📍</button>
-                            </div>
-                            <div class="frame-controls">
-                                <button class="btn btn-small btn-secondary frame-btn" id="playerAFrameBack10">-10f</button>
-                                <button class="btn btn-small btn-secondary frame-btn" id="playerAFrameBack">-1f</button>
-                                <button class="btn btn-icon btn-large btn-primary" id="playerAPlayPause">
-                                    <span class="play-icon">▶️</span>
-                                </button>
-                                <button class="btn btn-small btn-secondary frame-btn" id="playerAFrameForward">+1f</button>
-                                <button class="btn btn-small btn-secondary frame-btn" id="playerAFrameForward10">+10f</button>
                             </div>
                             <div class="volume-control">
                                 <span class="volume-icon" id="playerAVolumeIcon">🔊</span>
@@ -191,21 +208,38 @@
                             <label class="btn btn-secondary file-input-label">
                                 📁 <input type="file" id="playerBFile" accept="video/*" hidden>
                             </label>
+                            <div class="fps-select">
+                                <select id="playerBFps" class="speed-select">
+                                    <option value="30">30fps</option>
+                                    <option value="60" selected>60fps</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- Step Controls -->
+                        <div class="control-row step-controls">
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-60">-1m</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-30">-30s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-10">-10s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-5">-5s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="-1">-1s</button>
+                            <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="-10f">-10f</button>
+                            <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="-1f">-1f</button>
+                            <button class="btn btn-icon btn-large btn-primary" id="playerBPlayPause">
+                                <span class="play-icon">▶️</span>
+                            </button>
+                            <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="+1f">+1f</button>
+                            <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="+10f">+10f</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="1">+1s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="5">+5s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="10">+10s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="30">+30s</button>
+                            <button class="btn btn-small btn-secondary step-btn" data-step="60">+1m</button>
                         </div>
                         <div class="control-row playback-controls">
                             <div class="start-position">
                                 <span>開始:</span>
                                 <input type="text" id="playerBStartTime" class="start-position-input" value="0:00">
                                 <button class="btn btn-small btn-ghost" id="playerBSetStart">📍</button>
-                            </div>
-                            <div class="frame-controls">
-                                <button class="btn btn-small btn-secondary frame-btn" id="playerBFrameBack10">-10f</button>
-                                <button class="btn btn-small btn-secondary frame-btn" id="playerBFrameBack">-1f</button>
-                                <button class="btn btn-icon btn-large btn-primary" id="playerBPlayPause">
-                                    <span class="play-icon">▶️</span>
-                                </button>
-                                <button class="btn btn-small btn-secondary frame-btn" id="playerBFrameForward">+1f</button>
-                                <button class="btn btn-small btn-secondary frame-btn" id="playerBFrameForward10">+10f</button>
                             </div>
                             <div class="volume-control">
                                 <span class="volume-icon" id="playerBVolumeIcon">🔊</span>
@@ -303,16 +337,19 @@
                 <button class="btn btn-icon btn-ghost modal-close" id="closeHelpModal">✕</button>
             </div>
             <div class="modal-body">
-                <h3>⌨️ ショートカット</h3>
+                <h3>⌨️ ショートカット (VidTimer風)</h3>
                 <table class="shortcut-table">
                     <tr><td><kbd>Space</kbd></td><td>再生/停止</td></tr>
-                    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>±1フレーム</td></tr>
-                    <tr><td><kbd>Shift</kbd>+<kbd>←→</kbd></td><td>±10フレーム</td></tr>
+                    <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>±1フレーム</td></tr>
+                    <tr><td><kbd>Shift</kbd>+<kbd>,</kbd><kbd>.</kbd></td><td>±5フレーム</td></tr>
+                    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>±1秒</td></tr>
+                    <tr><td><kbd>Shift</kbd>+<kbd>←→</kbd></td><td>±5秒</td></tr>
                     <tr><td><kbd>S</kbd></td><td>同期 ON/OFF</td></tr>
                     <tr><td><kbd>R</kbd></td><td>開始位置に戻る</td></tr>
                 </table>
-                <h3>📐 タイムライン</h3>
-                <p>ローカル動画はサムネイルストリップを自動生成。<br>ドラッグでシーク、フレーム単位操作可能。</p>
+                <h3>📐 ステップボタン</h3>
+                <p>-1m,-30s,-10s,-5s,-1s,-10f,-1f / +1f,+10f,+1s,+5s,+10s,+30s,+1m<br>
+                FPS設定で30fps/60fpsを選択可能。</p>
             </div>
         </div>
     </div>

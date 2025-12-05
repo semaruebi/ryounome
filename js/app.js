@@ -144,16 +144,47 @@ class App {
                     e.preventDefault();
                     this.playerA.togglePlayPause();
                     break;
+                    
+                // Arrow keys: seconds
                 case 'ArrowLeft':
                     e.preventDefault();
-                    this.playerA.frameStep(shift ? -10 : -1);
-                    if (this.syncController.enabled) this.playerB.frameStep(shift ? -10 : -1);
+                    this.playerA.pause();
+                    if (shift) {
+                        // Shift + Left: -5 seconds
+                        this.playerA.seekTo(this.playerA.getCurrentTime() - 5);
+                        if (this.syncController.enabled) this.playerB.seekTo(this.playerB.getCurrentTime() - 5);
+                    } else {
+                        // Left: -1 second
+                        this.playerA.seekTo(this.playerA.getCurrentTime() - 1);
+                        if (this.syncController.enabled) this.playerB.seekTo(this.playerB.getCurrentTime() - 1);
+                    }
                     break;
                 case 'ArrowRight':
                     e.preventDefault();
-                    this.playerA.frameStep(shift ? 10 : 1);
-                    if (this.syncController.enabled) this.playerB.frameStep(shift ? 10 : 1);
+                    this.playerA.pause();
+                    if (shift) {
+                        // Shift + Right: +5 seconds
+                        this.playerA.seekTo(this.playerA.getCurrentTime() + 5);
+                        if (this.syncController.enabled) this.playerB.seekTo(this.playerB.getCurrentTime() + 5);
+                    } else {
+                        // Right: +1 second
+                        this.playerA.seekTo(this.playerA.getCurrentTime() + 1);
+                        if (this.syncController.enabled) this.playerB.seekTo(this.playerB.getCurrentTime() + 1);
+                    }
                     break;
+                    
+                // , . keys: frames (VidTimer style)
+                case 'Comma':
+                    e.preventDefault();
+                    this.playerA.frameStep(shift ? -5 : -1);
+                    if (this.syncController.enabled) this.playerB.frameStep(shift ? -5 : -1);
+                    break;
+                case 'Period':
+                    e.preventDefault();
+                    this.playerA.frameStep(shift ? 5 : 1);
+                    if (this.syncController.enabled) this.playerB.frameStep(shift ? 5 : 1);
+                    break;
+                    
                 case 'KeyS':
                     if (!e.ctrlKey && !e.metaKey) {
                         e.preventDefault();

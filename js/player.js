@@ -10,10 +10,10 @@ class VideoPlayer {
         this.youtubePlayer = null;
         this.videoUrl = null;
         this.isReady = false;
-        this.frameRate = options.frameRate || 30;
+        this.frameRate = 60; // Default 60fps
         this.startTime = 0;
         this.isSeeking = false;
-        this.precision = 50; // 1-100, affects seek step
+        this.precision = 50;
         
         // Callbacks
         this.onTimeUpdate = options.onTimeUpdate || (() => {});
@@ -59,10 +59,12 @@ class VideoPlayer {
             volumeSlider: document.getElementById(`${p}Volume`),
             volumeIcon: document.getElementById(`${p}VolumeIcon`),
             speedSelect: document.getElementById(`${p}Speed`),
+            fpsSelect: document.getElementById(`${p}Fps`),
             timeDisplay: document.getElementById(`${p}Time`),
             nameInput: document.getElementById(`${p}Name`),
             startTimeInput: document.getElementById(`${p}StartTime`),
             setStartBtn: document.getElementById(`${p}SetStart`),
+            container: document.getElementById(`${p}Container`),
             // Timeline
             timeline: document.getElementById(`${p}Timeline`),
             thumbnailStrip: document.getElementById(`${p}ThumbnailStrip`),
@@ -101,12 +103,17 @@ class VideoPlayer {
         // Drag & Drop
         this.setupDragDrop();
 
+        // FPS select
+        this.elements.fpsSelect?.addEventListener('change', (e) => {
+            this.frameRate = parseInt(e.target.value);
+            Toast.show(`${this.frameRate}fps に設定`, 'success');
+        });
+
         // Playback controls
         this.elements.playPauseBtn?.addEventListener('click', () => this.togglePlayPause());
-        this.elements.frameBackBtn?.addEventListener('click', () => this.frameStep(-1));
-        this.elements.frameForwardBtn?.addEventListener('click', () => this.frameStep(1));
-        this.elements.frameBack10Btn?.addEventListener('click', () => this.frameStep(-10));
-        this.elements.frameForward10Btn?.addEventListener('click', () => this.frameStep(10));
+        
+        // Step buttons (VidTimer style)
+        this.setupStepButtons();
 
         // Volume
         this.elements.volumeSlider?.addEventListener('input', (e) => {
@@ -189,12 +196,44 @@ class VideoPlayer {
         return 0.0001; // Frame level
     }
 
+    setupStepButtons() {
+        // Find all step buttons in this player's container
+        const container = this.elements.container;
+        if (!container) return;
+        
+        const stepBtns = container.querySelectorAll('.step-btn[data-step]');
+        stepBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const step = btn.dataset.step;
+                this.handleStep(step);
+            });
+        });
+    }
+
+    handleStep(step) {
+        if (!this.isReady) return;
+        
+        this.pause();
+        
+        // Parse step value
+        if (step.includes('f')) {
+            // Frame step: -1f, +1f, -10f, +10f
+            const frames = parseInt(step.replace('f', '').replace('+', ''));
+            this.frameStep(frames);
+        } else {
+            // Second step: -1, +1, -5, +5, -10, +10, -30, +30, -60, +60
+            const seconds = parseFloat(step);
+            const newTime = this.getCurrentTime() + seconds;
+            this.seekTo(newTime);
+        }
+    }
+
     setupDragDrop() {
         const screen = this.elements.screen;
         const dropzone = this.elements.dropzone;
-        const container = this.elements.container;
+        const playerContainer = this.elements.container;
 
-        [screen, container].forEach(el => {
+        [screen, playerContainer].forEach(el => {
             if (!el) return;
             
             el.addEventListener('dragenter', (e) => {
