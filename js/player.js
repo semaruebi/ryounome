@@ -1,6 +1,7 @@
 /**
  * RyounoMe - Player Module
  * 動画プレイヤーの管理（YouTube / ローカルファイル対応）
+ * Performance optimized version
  */
 
 class VideoPlayer {
@@ -11,13 +12,22 @@ class VideoPlayer {
         this.youtubePlayer = null;
         this.videoUrl = null;
         this.isReady = false;
-        this.frameRate = options.frameRate || 30; // デフォルト30fps
+        this.frameRate = options.frameRate || 30;
+        this.startTime = 0; // 開始位置
+        this.zoomLevel = 1; // シークバーの精度（1-100）
+        
+        // Callbacks
         this.onTimeUpdate = options.onTimeUpdate || (() => {});
         this.onStateChange = options.onStateChange || (() => {});
         this.onReady = options.onReady || (() => {});
         
+        // Performance: Throttle time updates
+        this.lastTimeUpdate = 0;
+        this.timeUpdateThrottle = 50; // ms
+        
         this.initElements();
         this.bindEvents();
+        this.loadSavedName();
     }
 
     initElements() {
@@ -36,9 +46,17 @@ class VideoPlayer {
             frameBackBtn: document.getElementById(`${prefix}FrameBack`),
             frameForwardBtn: document.getElementById(`${prefix}FrameForward`),
             volumeSlider: document.getElementById(`${prefix}Volume`),
+            volumeIcon: document.getElementById(`${prefix}VolumeIcon`),
             speedSelect: document.getElementById(`${prefix}Speed`),
             seekbar: document.getElementById(`${prefix}Seek`),
-            timeDisplay: document.getElementById(`${prefix}Time`)
+            seekWrapper: document.getElementById(`${prefix}SeekWrapper`),
+            seekPreview: document.getElementById(`${prefix}SeekPreview`),
+            zoomSlider: document.getElementById(`${prefix}Zoom`),
+            zoomIndicator: document.getElementById(`${prefix}ZoomIndicator`),
+            timeDisplay: document.getElementById(`${prefix}Time`),
+            nameInput: document.getElementById(`${prefix}Name`),
+            startTimeInput: document.getElementById(`${prefix}StartTime`),
+            setStartBtn: document.getElementById(`${prefix}SetStart`)
         };
     }
 
@@ -68,27 +86,187 @@ class VideoPlayer {
         this.elements.volumeSlider.addEventListener('input', (e) => {
             this.setVolume(parseInt(e.target.value) / 100);
         });
+        
+        // 音量アイコンでミュート切り替え
+        this.elements.volumeIcon.addEventListener('click', () => {
+            const current = parseInt(this.elements.volumeSlider.value);
+            if (current > 0) {
+                this.elements.volumeSlider.dataset.prevVolume = current;
+                this.elements.volumeSlider.value = 0;
+                this.setVolume(0);
+            } else {
+                const prev = this.elements.volumeSlider.dataset.prevVolume || 100;
+                this.elements.volumeSlider.value = prev;
+                this.setVolume(prev / 100);
+            }
+        });
 
         // 再生速度
         this.elements.speedSelect.addEventListener('change', (e) => {
             this.setPlaybackRate(parseFloat(e.target.value));
         });
 
-        // シークバー
+        // シークバー - リアルタイムプレビュー
         this.elements.seekbar.addEventListener('input', (e) => {
             const duration = this.getDuration();
             if (duration > 0) {
                 const time = (parseFloat(e.target.value) / 100) * duration;
+                this.updateSeekPreview(time, e);
+                // リアルタイムでシーク
                 this.seekTo(time);
             }
         });
+        
+        // シークバーホバー時のプレビュー
+        this.elements.seekWrapper.addEventListener('mousemove', (e) => {
+            if (!this.isReady) return;
+            const rect = this.elements.seekbar.getBoundingClientRect();
+            const percent = (e.clientX - rect.left) / rect.width;
+            const time = percent * this.getDuration();
+            this.updateSeekPreview(time, e);
+        });
 
-        // ローカルビデオのイベント
-        this.elements.video.addEventListener('timeupdate', () => this.handleTimeUpdate());
+        // ズームレベル（精度）
+        this.elements.zoomSlider.addEventListener('input', (e) => {
+            this.zoomLevel = parseInt(e.target.value);
+            this.updateZoomIndicator();
+            this.updateSeekbarStep();
+        });
+
+        // 開始位置設定
+        this.elements.setStartBtn.addEventListener('click', () => {
+            this.captureStartTime();
+        });
+        
+        this.elements.startTimeInput.addEventListener('change', (e) => {
+            this.startTime = this.parseTimeInput(e.target.value);
+        });
+
+        // 名前入力
+        this.elements.nameInput.addEventListener('change', (e) => {
+            this.saveName(e.target.value);
+        });
+
+        // ローカルビデオのイベント - パフォーマンス最適化
+        this.elements.video.addEventListener('timeupdate', () => {
+            this.throttledTimeUpdate();
+        });
         this.elements.video.addEventListener('play', () => this.handleStateChange('playing'));
         this.elements.video.addEventListener('pause', () => this.handleStateChange('paused'));
         this.elements.video.addEventListener('ended', () => this.handleStateChange('ended'));
         this.elements.video.addEventListener('loadedmetadata', () => this.handleVideoLoaded());
+        
+        // パフォーマンス: seeking中はUIを軽量化
+        this.elements.video.addEventListener('seeking', () => {
+            this.elements.container.classList.add('seeking');
+        });
+        this.elements.video.addEventListener('seeked', () => {
+            this.elements.container.classList.remove('seeking');
+        });
+    }
+
+    throttledTimeUpdate() {
+        const now = Date.now();
+        if (now - this.lastTimeUpdate >= this.timeUpdateThrottle) {
+            this.lastTimeUpdate = now;
+            this.handleTimeUpdate();
+        }
+    }
+
+    updateSeekPreview(time, event) {
+        const preview = this.elements.seekPreview;
+        preview.textContent = this.formatTimeShort(time);
+        
+        // Position preview above cursor
+        const rect = this.elements.seekWrapper.getBoundingClientRect();
+        const x = event ? event.clientX - rect.left : this.elements.seekbar.offsetWidth / 2;
+        preview.style.left = `${Math.max(30, Math.min(rect.width - 30, x))}px`;
+    }
+
+    updateZoomIndicator() {
+        const indicators = [
+            { level: 1, label: '1分単位' },
+            { level: 10, label: '10秒単位' },
+            { level: 25, label: '5秒単位' },
+            { level: 50, label: '1秒単位' },
+            { level: 75, label: '100ms単位' },
+            { level: 100, label: 'ミリ秒単位' }
+        ];
+        
+        let label = '1分単位';
+        for (const ind of indicators) {
+            if (this.zoomLevel >= ind.level) {
+                label = ind.label;
+            }
+        }
+        this.elements.zoomIndicator.textContent = label;
+    }
+
+    updateSeekbarStep() {
+        // Zoomレベルに応じてステップを変更
+        const steps = {
+            1: 1,        // 1%
+            10: 0.1,     // 0.1%
+            25: 0.05,    // 0.05%
+            50: 0.01,    // 0.01%
+            75: 0.001,   // 0.001%
+            100: 0.0001  // 0.0001%
+        };
+        
+        let step = 1;
+        for (const [level, s] of Object.entries(steps)) {
+            if (this.zoomLevel >= parseInt(level)) {
+                step = s;
+            }
+        }
+        this.elements.seekbar.step = step;
+    }
+
+    captureStartTime() {
+        const currentTime = this.getCurrentTime();
+        this.startTime = currentTime;
+        this.elements.startTimeInput.value = this.formatTimeInput(currentTime);
+        Toast.show('開始位置を設定しました', 'success');
+    }
+
+    parseTimeInput(value) {
+        // "1:30", "1:30:00", "90", "90.5" などをパース
+        if (!value) return 0;
+        
+        const parts = value.split(':').map(p => parseFloat(p) || 0);
+        
+        if (parts.length === 1) {
+            return parts[0]; // 秒のみ
+        } else if (parts.length === 2) {
+            return parts[0] * 60 + parts[1]; // 分:秒
+        } else if (parts.length >= 3) {
+            return parts[0] * 3600 + parts[1] * 60 + parts[2]; // 時:分:秒
+        }
+        return 0;
+    }
+
+    formatTimeInput(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    goToStart() {
+        this.seekTo(this.startTime);
+    }
+
+    saveName(name) {
+        const settings = Storage.loadSettings();
+        settings[`player${this.key}Name`] = name;
+        Storage.saveSettings(settings);
+    }
+
+    loadSavedName() {
+        const settings = Storage.loadSettings();
+        const name = settings[`player${this.key}Name`];
+        if (name) {
+            this.elements.nameInput.value = name;
+        }
     }
 
     setupDragDrop() {
@@ -155,10 +333,8 @@ class VideoPlayer {
         this.elements.video.style.display = 'none';
         this.elements.youtubeContainer.style.display = 'block';
 
-        // YouTube Player APIが読み込まれていることを確認
         if (typeof YT === 'undefined' || !YT.Player) {
             Toast.show('YouTube API を読み込み中...', 'warning');
-            // APIの読み込みを待つ
             const checkAPI = setInterval(() => {
                 if (typeof YT !== 'undefined' && YT.Player) {
                     clearInterval(checkAPI);
@@ -171,7 +347,6 @@ class VideoPlayer {
     }
 
     createYoutubePlayer(videoId) {
-        // 既存のプレイヤーを破棄
         if (this.youtubePlayer) {
             this.youtubePlayer.destroy();
         }
@@ -184,7 +359,8 @@ class VideoPlayer {
                 modestbranding: 1,
                 rel: 0,
                 fs: 0,
-                playsinline: 1
+                playsinline: 1,
+                disablekb: 1 // キーボード操作を無効化（自前で制御）
             },
             events: {
                 onReady: (e) => this.handleYoutubeReady(e),
@@ -198,8 +374,14 @@ class VideoPlayer {
         this.isReady = true;
         this.elements.youtubeContainer.style.display = 'block';
         this.startTimeUpdateLoop();
+        
+        // 開始位置が設定されていれば移動
+        if (this.startTime > 0) {
+            this.seekTo(this.startTime);
+        }
+        
         this.onReady(this);
-        Toast.show(`プレイヤー${this.key}: YouTube動画を読み込みました`, 'success');
+        Toast.show(`${this.elements.nameInput.value}: YouTube動画を読み込みました`, 'success');
     }
 
     handleYoutubeStateChange(event) {
@@ -237,12 +419,21 @@ class VideoPlayer {
         const url = URL.createObjectURL(file);
         this.elements.video.src = url;
         this.videoElement = this.elements.video;
+        
+        // パフォーマンス最適化
+        this.elements.video.preload = 'auto';
     }
 
     handleVideoLoaded() {
         this.isReady = true;
+        
+        // 開始位置が設定されていれば移動
+        if (this.startTime > 0) {
+            this.seekTo(this.startTime);
+        }
+        
         this.onReady(this);
-        Toast.show(`プレイヤー${this.key}: ローカル動画を読み込みました`, 'success');
+        Toast.show(`${this.elements.nameInput.value}: ローカル動画を読み込みました`, 'success');
     }
 
     handleTimeUpdate() {
@@ -252,16 +443,26 @@ class VideoPlayer {
         // 時間表示更新
         this.elements.timeDisplay.textContent = this.formatTime(currentTime);
         
-        // シークバー更新
-        if (duration > 0) {
+        // シークバー更新（ドラッグ中でなければ）
+        if (duration > 0 && !this.elements.seekbar.matches(':active')) {
             this.elements.seekbar.value = (currentTime / duration) * 100;
         }
+        
+        // 音量アイコン更新
+        this.updateVolumeIcon();
 
         this.onTimeUpdate(currentTime, this);
     }
 
+    updateVolumeIcon() {
+        const volume = parseInt(this.elements.volumeSlider.value);
+        let icon = '🔊';
+        if (volume === 0) icon = '🔇';
+        else if (volume < 50) icon = '🔉';
+        this.elements.volumeIcon.textContent = icon;
+    }
+
     handleStateChange(state) {
-        // 再生ボタンのアイコン更新
         const icon = this.elements.playPauseBtn.querySelector('.play-icon');
         if (state === 'playing') {
             icon.textContent = '⏸️';
@@ -273,11 +474,11 @@ class VideoPlayer {
     }
 
     startTimeUpdateLoop() {
-        // YouTube用のタイムアップデートループ
         if (this.timeUpdateInterval) {
             clearInterval(this.timeUpdateInterval);
         }
 
+        // パフォーマンス最適化: 更新間隔を調整
         this.timeUpdateInterval = setInterval(() => {
             if (this.type === 'youtube' && this.youtubePlayer && this.isReady) {
                 this.handleTimeUpdate();
@@ -383,6 +584,8 @@ class VideoPlayer {
         } else if (this.type === 'local' && this.elements.video) {
             this.elements.video.volume = volume;
         }
+        
+        this.updateVolumeIcon();
     }
 
     setPlaybackRate(rate) {
@@ -402,6 +605,17 @@ class VideoPlayer {
         const ms = Math.floor((seconds % 1) * 1000);
 
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+    }
+
+    formatTimeShort(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+
+        if (h > 0) {
+            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+        return `${m}:${s.toString().padStart(2, '0')}`;
     }
 
     cleanup() {
@@ -431,4 +645,3 @@ class VideoPlayer {
 
 // グローバルに公開
 window.VideoPlayer = VideoPlayer;
-

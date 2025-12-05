@@ -1,17 +1,20 @@
 /**
  * RyounoMe - Main Application
  * アプリケーションのエントリーポイント
+ * Performance optimized version
  */
 
 // Toast通知ユーティリティ
 const Toast = {
     container: null,
+    queue: [],
+    isProcessing: false,
 
     init() {
         this.container = document.getElementById('toastContainer');
     },
 
-    show(message, type = 'info', duration = 3000) {
+    show(message, type = 'info', duration = 2500) {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         
@@ -47,6 +50,7 @@ class App {
         this.playerB = null;
         this.syncController = null;
         this.commentsController = null;
+        this.sidebarOpen = true;
         
         // YouTube API Ready callback
         window.onYouTubeIframeAPIReady = () => {
@@ -60,10 +64,11 @@ class App {
         this.initSync();
         this.initComments();
         this.initUI();
+        this.initSidebar();
         this.bindKeyboardShortcuts();
 
         console.log('RyounoMe initialized');
-        Toast.show('RyounoMe へようこそ！🎮', 'success');
+        Toast.show('RyounoMe へようこそ！', 'success');
     }
 
     initPlayers() {
@@ -116,6 +121,13 @@ class App {
             helpModal.classList.remove('active');
         });
 
+        // ESCでモーダルを閉じる
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && helpModal.classList.contains('active')) {
+                helpModal.classList.remove('active');
+            }
+        });
+
         // エクスポート
         document.getElementById('exportBtn').addEventListener('click', () => {
             if (Storage.exportData()) {
@@ -147,15 +159,45 @@ class App {
                 Toast.show(`インポートエラー: ${error.message}`, 'error');
             }
 
-            // ファイル入力をリセット
             e.target.value = '';
+        });
+    }
+
+    initSidebar() {
+        const sidebar = document.getElementById('commentsSidebar');
+        const toggleBtn = document.getElementById('sidebarToggleBtn');
+        const mobileToggle = document.getElementById('mobileSidebarToggle');
+
+        // サイドバートグル
+        const toggleSidebar = () => {
+            this.sidebarOpen = !this.sidebarOpen;
+            sidebar.classList.toggle('open', this.sidebarOpen);
+            sidebar.classList.toggle('collapsed', !this.sidebarOpen);
+        };
+
+        toggleBtn.addEventListener('click', toggleSidebar);
+        mobileToggle.addEventListener('click', toggleSidebar);
+
+        // 初期状態（PCではデフォルトで開く、モバイルでは閉じる）
+        if (window.innerWidth <= 1200) {
+            this.sidebarOpen = false;
+            sidebar.classList.add('collapsed');
+        }
+
+        // リサイズ時の処理
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 1200) {
+                sidebar.classList.remove('collapsed');
+                sidebar.classList.remove('open');
+                this.sidebarOpen = true;
+            }
         });
     }
 
     bindKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
             // 入力フォーカス中は無視
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
                 return;
             }
 
@@ -179,8 +221,20 @@ class App {
                     }
                     break;
                 case 'KeyS':
-                    e.preventDefault();
-                    this.syncController.toggle();
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        this.syncController.toggle();
+                    }
+                    break;
+                case 'KeyR':
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        // 両プレイヤーを開始位置に戻す
+                        this.playerA.goToStart();
+                        if (this.syncController.enabled) {
+                            this.playerB.goToStart();
+                        }
+                    }
                     break;
             }
         });
@@ -227,7 +281,7 @@ class App {
             this.syncController.handleSeek(comment.timestamp);
         }
         
-        Toast.show(`${this.formatTime(comment.timestamp)} にジャンプしました`, 'success');
+        Toast.show(`${this.formatTime(comment.timestamp)} にジャンプ`, 'success');
     }
 
     getPlayerTime(playerKey) {
@@ -253,4 +307,3 @@ document.addEventListener('DOMContentLoaded', () => {
     // グローバルに公開（デバッグ用）
     window.app = app;
 });
-
