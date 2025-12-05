@@ -161,19 +161,14 @@ class App {
         if (this.playerA) {
             let sourceA = this.playerA.videoUrl || '';
             
-            // If local file, prompt for file path
+            // If local file, prompt for folder path
             if (this.playerA.type === 'local' && this.playerA.videoUrl) {
-                // Use stored path or prompt for new one
                 if (!this.playerA.localFilePath) {
-                    const inputPath = prompt(
-                        `プレイヤーA のローカル動画ファイルパスを入力してください:\n（例: D:\\Videos\\my_video.mp4）`,
-                        this.playerA.videoUrl
-                    );
-                    if (inputPath) {
-                        this.playerA.localFilePath = inputPath;
-                    }
+                    sourceA = this.promptForLocalFilePath('A', this.playerA.videoUrl);
+                    this.playerA.localFilePath = sourceA;
+                } else {
+                    sourceA = this.playerA.localFilePath;
                 }
-                sourceA = this.playerA.localFilePath || this.playerA.videoUrl;
             }
             
             Storage.savePlayerData('A', {
@@ -187,19 +182,14 @@ class App {
         if (this.playerB) {
             let sourceB = this.playerB.videoUrl || '';
             
-            // If local file, prompt for file path
+            // If local file, prompt for folder path
             if (this.playerB.type === 'local' && this.playerB.videoUrl) {
-                // Use stored path or prompt for new one
                 if (!this.playerB.localFilePath) {
-                    const inputPath = prompt(
-                        `プレイヤーB のローカル動画ファイルパスを入力してください:\n（例: D:\\Videos\\my_video.mp4）`,
-                        this.playerB.videoUrl
-                    );
-                    if (inputPath) {
-                        this.playerB.localFilePath = inputPath;
-                    }
+                    sourceB = this.promptForLocalFilePath('B', this.playerB.videoUrl);
+                    this.playerB.localFilePath = sourceB;
+                } else {
+                    sourceB = this.playerB.localFilePath;
                 }
-                sourceB = this.playerB.localFilePath || this.playerB.videoUrl;
             }
             
             Storage.savePlayerData('B', {
@@ -209,6 +199,30 @@ class App {
                 endMarker: this.playerB.endMarker
             });
         }
+    }
+    
+    promptForLocalFilePath(playerKey, fileName) {
+        // Get last used folder from localStorage
+        const lastFolder = localStorage.getItem('ryounome_lastVideoFolder') || 'E:\\Videos';
+        
+        const inputFolder = prompt(
+            `プレイヤー${playerKey} の動画フォルダを入力してください:\n` +
+            `ファイル名: ${fileName}\n` +
+            `（例: E:\\Videos）`,
+            lastFolder
+        );
+        
+        if (inputFolder) {
+            // Save as last used folder
+            localStorage.setItem('ryounome_lastVideoFolder', inputFolder);
+            
+            // Combine folder + filename
+            // Ensure folder ends without backslash, then add one
+            const folder = inputFolder.replace(/\\$/, '');
+            return `${folder}\\${fileName}`;
+        }
+        
+        return fileName;
     }
 
     clearAllPlayers() {
