@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RyounoMe - RTA動画比較・分析ツール</title>
+    <title>RyounoMe - RTA動画比較・分析ツール 🎀</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -15,10 +18,24 @@
                 <span class="logo-text">RyounoMe</span>
                 <span class="logo-subtitle">RTA Analyzer</span>
             </h1>
+            
+            <!-- Project Selector -->
+            <div class="project-selector">
+                <select id="projectSelect" class="project-select">
+                    <option value="">プロジェクトを選択...</option>
+                </select>
+                <button class="btn btn-small btn-primary" id="loadProjectBtn" title="プロジェクトを読み込む">📂 読込</button>
+                <button class="btn btn-small btn-secondary" id="newProjectBtn" title="新規プロジェクト">＋ 新規</button>
+                <button class="btn btn-small btn-ghost" id="renameProjectBtn" title="名前変更">✏️</button>
+                <button class="btn btn-small btn-ghost" id="deleteProjectBtn" title="削除">🗑️</button>
+                <button class="btn btn-small btn-ghost" id="reloadProjectBtn" title="現在のプロジェクトを再読込">🔄</button>
+            </div>
+            
             <nav class="header-nav">
                 <button class="btn btn-ghost" id="importBtn" title="Import">📥</button>
                 <button class="btn btn-ghost" id="exportBtn" title="Export">📤</button>
                 <button class="btn btn-ghost" id="sidebarToggleBtn" title="コメント">💬</button>
+                <button class="btn btn-ghost" id="themeToggleBtn" title="テーマ切替">🌙</button>
                 <button class="btn btn-ghost" id="helpBtn" title="ヘルプ">❓</button>
             </nav>
         </div>
@@ -92,9 +109,10 @@
                                 <input type="text" id="playerAUrl" class="input-url" placeholder="YouTube URL...">
                                 <button class="btn btn-primary" id="playerALoadBtn">読込</button>
                             </div>
-                            <label class="btn btn-secondary file-input-label">
+                            <label class="btn btn-secondary file-input-label" title="ファイル選択（従来方式）">
                                 📁 <input type="file" id="playerAFile" accept="video/*" hidden>
                             </label>
+                            <button class="btn btn-secondary" id="playerAFilePicker" title="ファイル選択（パス保存）">📂</button>
                             <div class="fps-select">
                                 <select id="playerAFps" class="speed-select">
                                     <option value="30">30fps</option>
@@ -124,15 +142,17 @@
                         </div>
                         <!-- Frame Markers -->
                         <div class="control-row marker-controls">
-                            <div class="marker-group">
-                                <button class="btn btn-small btn-primary" id="playerASetStart">Set Start</button>
-                                <span class="marker-value" id="playerAStartValue">--:--:--:--</span>
-                                <button class="btn btn-small btn-ghost" id="playerAGoStart">▶</button>
+                            <div class="marker-group marker-start">
+                                <button class="btn btn-marker btn-marker-start" id="playerASetStart">📍 Start</button>
+                                <span class="marker-value" id="playerAStartValue">--:--:--</span>
+                                <button class="btn btn-small btn-ghost" id="playerAGoStart" data-tooltip="この位置へ移動">↩</button>
+                                <button class="btn btn-small btn-ghost" id="playerAClearStart" data-tooltip="クリア">✕</button>
                             </div>
-                            <div class="marker-group">
-                                <button class="btn btn-small btn-secondary" id="playerASetEnd">Set End</button>
-                                <span class="marker-value" id="playerAEndValue">--:--:--:--</span>
-                                <button class="btn btn-small btn-ghost" id="playerAGoEnd">▶</button>
+                            <div class="marker-group marker-end">
+                                <button class="btn btn-marker btn-marker-end" id="playerASetEnd">🏁 End</button>
+                                <span class="marker-value" id="playerAEndValue">--:--:--</span>
+                                <button class="btn btn-small btn-ghost" id="playerAGoEnd" data-tooltip="この位置へ移動">↩</button>
+                                <button class="btn btn-small btn-ghost" id="playerAClearEnd" data-tooltip="クリア">✕</button>
                             </div>
                             <div class="segment-time">
                                 <span class="segment-label">区間:</span>
@@ -217,9 +237,10 @@
                                 <input type="text" id="playerBUrl" class="input-url" placeholder="YouTube URL...">
                                 <button class="btn btn-primary" id="playerBLoadBtn">読込</button>
                             </div>
-                            <label class="btn btn-secondary file-input-label">
+                            <label class="btn btn-secondary file-input-label" title="ファイル選択（従来方式）">
                                 📁 <input type="file" id="playerBFile" accept="video/*" hidden>
                             </label>
+                            <button class="btn btn-secondary" id="playerBFilePicker" title="ファイル選択（パス保存）">📂</button>
                             <div class="fps-select">
                                 <select id="playerBFps" class="speed-select">
                                     <option value="30">30fps</option>
@@ -249,15 +270,17 @@
                         </div>
                         <!-- Frame Markers -->
                         <div class="control-row marker-controls">
-                            <div class="marker-group">
-                                <button class="btn btn-small btn-primary" id="playerBSetStart">Set Start</button>
-                                <span class="marker-value" id="playerBStartValue">--:--:--:--</span>
-                                <button class="btn btn-small btn-ghost" id="playerBGoStart">▶</button>
+                            <div class="marker-group marker-start">
+                                <button class="btn btn-marker btn-marker-start" id="playerBSetStart">📍 Start</button>
+                                <span class="marker-value" id="playerBStartValue">--:--:--</span>
+                                <button class="btn btn-small btn-ghost" id="playerBGoStart" data-tooltip="この位置へ移動">↩</button>
+                                <button class="btn btn-small btn-ghost" id="playerBClearStart" data-tooltip="クリア">✕</button>
                             </div>
-                            <div class="marker-group">
-                                <button class="btn btn-small btn-secondary" id="playerBSetEnd">Set End</button>
-                                <span class="marker-value" id="playerBEndValue">--:--:--:--</span>
-                                <button class="btn btn-small btn-ghost" id="playerBGoEnd">▶</button>
+                            <div class="marker-group marker-end">
+                                <button class="btn btn-marker btn-marker-end" id="playerBSetEnd">🏁 End</button>
+                                <span class="marker-value" id="playerBEndValue">--:--:--</span>
+                                <button class="btn btn-small btn-ghost" id="playerBGoEnd" data-tooltip="この位置へ移動">↩</button>
+                                <button class="btn btn-small btn-ghost" id="playerBClearEnd" data-tooltip="クリア">✕</button>
                             </div>
                             <div class="segment-time">
                                 <span class="segment-label">区間:</span>
@@ -290,20 +313,33 @@
                     <button class="btn btn-sync" id="syncToggle">
                         🔗 同期 <span class="sync-status" id="syncStatus">OFF</span>
                     </button>
-                    <div class="sync-offset">
-                        <span class="offset-label">オフセット (秒)</span>
-                        <div class="offset-controls">
-                            <button class="btn btn-small btn-secondary" id="offsetMinus1">-1</button>
-                            <button class="btn btn-small btn-secondary" id="offsetMinus01">-.1</button>
-                            <input type="number" id="syncOffsetInput" class="offset-input" value="0" step="0.001">
-                            <button class="btn btn-small btn-secondary" id="offsetPlus01">+.1</button>
-                            <button class="btn btn-small btn-secondary" id="offsetPlus1">+1</button>
+                    <div class="sync-master">
+                        <span class="offset-label">基準</span>
+                        <div class="master-buttons">
+                            <button class="btn btn-master active" id="masterA" data-master="A">A</button>
+                            <button class="btn btn-master" id="masterB" data-master="B">B</button>
                         </div>
-                        <span class="offset-hint">B = A + offset</span>
+                    </div>
+                    <div class="sync-startpos">
+                        <div class="startpos-group">
+                            <span class="startpos-label">A開始</span>
+                            <input type="text" id="playerAStartPos" class="startpos-input" placeholder="0:00" value="0:00">
+                        </div>
+                        <div class="startpos-group">
+                            <span class="startpos-label">B開始</span>
+                            <input type="text" id="playerBStartPos" class="startpos-input" placeholder="0:00" value="0:00">
+                        </div>
                     </div>
                     <div class="sync-actions">
-                        <button class="btn btn-secondary" id="syncNowBtn">⚡ 同期実行</button>
-                        <button class="btn btn-ghost" id="resetOffsetBtn">🔄</button>
+                        <button class="btn btn-primary" id="syncPlayBtn">▶ 両方再生</button>
+                        <button class="btn btn-secondary" id="syncPauseBtn">⏸ 両方停止</button>
+                        <button class="btn btn-secondary" id="syncResetBtn">↩ 開始位置へ</button>
+                    </div>
+                    <div class="loop-mode-toggle">
+                        <span class="loop-label">End到達時:</span>
+                        <button class="btn btn-small loop-btn active" id="loopModeLoop" data-mode="loop">🔁 ループ</button>
+                        <button class="btn btn-small loop-btn" id="loopModeContinue" data-mode="continue">▶ 継続</button>
+                        <button class="btn btn-small loop-btn" id="loopModeStop" data-mode="stop">⏹ 停止</button>
                     </div>
                 </div>
             </section>

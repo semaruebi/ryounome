@@ -9,7 +9,11 @@ class SyncController {
         this.playerB = playerB;
         this.enabled = false;
         this.offset = 0; // 秒単位
+        this.masterKey = 'A'; // 'A' or 'B' - which player is the master
         this.syncThreshold = 0.1; // 同期のずれ許容値（秒）
+        this.loopMode = 'loop'; // 'loop', 'continue', 'stop'
+        this.playerAReachedEnd = false;
+        this.playerBReachedEnd = false;
         this.onSyncStateChange = options.onSyncStateChange || (() => {});
         
         this.initElements();
@@ -21,46 +25,252 @@ class SyncController {
         this.elements = {
             syncToggle: document.getElementById('syncToggle'),
             syncStatus: document.getElementById('syncStatus'),
-            offsetInput: document.getElementById('syncOffsetInput'),
-            offsetMinus1: document.getElementById('offsetMinus1'),
-            offsetMinus01: document.getElementById('offsetMinus01'),
-            offsetPlus01: document.getElementById('offsetPlus01'),
-            offsetPlus1: document.getElementById('offsetPlus1'),
-            syncNowBtn: document.getElementById('syncNowBtn'),
-            resetOffsetBtn: document.getElementById('resetOffsetBtn')
+            masterBtnA: document.getElementById('masterA'),
+            masterBtnB: document.getElementById('masterB'),
+            playerAContainer: document.getElementById('playerAContainer'),
+            playerBContainer: document.getElementById('playerBContainer'),
+            // Start positions
+            playerAStartPos: document.getElementById('playerAStartPos'),
+            playerBStartPos: document.getElementById('playerBStartPos'),
+            // Action buttons
+            syncPlayBtn: document.getElementById('syncPlayBtn'),
+            syncPauseBtn: document.getElementById('syncPauseBtn'),
+            syncResetBtn: document.getElementById('syncResetBtn'),
+            // Loop mode buttons
+            loopModeLoop: document.getElementById('loopModeLoop'),
+            loopModeContinue: document.getElementById('loopModeContinue'),
+            loopModeStop: document.getElementById('loopModeStop')
         };
     }
 
     bindEvents() {
         // 同期ON/OFF
-        this.elements.syncToggle.addEventListener('click', () => this.toggle());
+        this.elements.syncToggle?.addEventListener('click', () => this.toggle());
 
-        // オフセット調整ボタン
-        this.elements.offsetMinus1.addEventListener('click', () => this.adjustOffset(-1));
-        this.elements.offsetMinus01.addEventListener('click', () => this.adjustOffset(-0.1));
-        this.elements.offsetPlus01.addEventListener('click', () => this.adjustOffset(0.1));
-        this.elements.offsetPlus1.addEventListener('click', () => this.adjustOffset(1));
+        // マスター選択ボタン
+        this.elements.masterBtnA?.addEventListener('click', () => this.setMaster('A'));
+        this.elements.masterBtnB?.addEventListener('click', () => this.setMaster('B'));
 
-        // オフセット入力
-        this.elements.offsetInput.addEventListener('change', (e) => {
-            this.setOffset(parseFloat(e.target.value) || 0);
+        // Start position inputs
+        this.elements.playerAStartPos?.addEventListener('change', () => this.saveStartPositions());
+        this.elements.playerBStartPos?.addEventListener('change', () => this.saveStartPositions());
+
+        // Action buttons
+        this.elements.syncPlayBtn?.addEventListener('click', () => this.playBoth());
+        this.elements.syncPauseBtn?.addEventListener('click', () => this.pauseBoth());
+        this.elements.syncResetBtn?.addEventListener('click', () => this.resetToStart());
+        
+        // Loop mode buttons
+        this.elements.loopModeLoop?.addEventListener('click', () => this.setLoopMode('loop'));
+        this.elements.loopModeContinue?.addEventListener('click', () => this.setLoopMode('continue'));
+        this.elements.loopModeStop?.addEventListener('click', () => this.setLoopMode('stop'));
+    }
+
+    setLoopMode(mode) {
+        this.loopMode = mode;
+        
+        // Update button states
+        this.elements.loopModeLoop?.classList.toggle('active', mode === 'loop');
+        this.elements.loopModeContinue?.classList.toggle('active', mode === 'continue');
+        this.elements.loopModeStop?.classList.toggle('active', mode === 'stop');
+        
+        Storage.saveSettings({ loopMode: mode });
+        
+        const labels = { loop: 'ループ', continue: '継続', stop: '停止' };
+        Toast.show(`End到達時: ${labels[mode]}`, 'info');
+    }
+
+    // Called when a player reaches its end marker
+    handleEndReached(playerKey) {
+        if (!this.enabled) {
+            // Sync OFF: handle individually
+            this.handleSinglePlayerEnd(playerKey);
+            return;
+        }
+        
+        // Sync ON: wait for both players
+        if (playerKey === 'A') {
+            this.playerAReachedEnd = true;
+        } else {
+            this.playerBReachedEnd = true;
+        }
+        
+        // Check if both reached end
+        if (this.playerAReachedEnd && this.playerBReachedEnd) {
+            this.handleBothPlayersEnd();
+        }
+    }
+
+    handleSinglePlayerEnd(playerKey) {
+        const player = playerKey === 'A' ? this.playerA : this.playerB;
+        
+        switch (this.loopMode) {
+            case 'loop':
+                if (player.startMarker !== null) {
+                    player.seekTo(player.startMarker);
+                    // Continue playing
+                }
+                break;
+            case 'continue':
+                // Clear end marker and continue
+                player.endMarker = null;
+                player.updateMarkerDisplay();
+                break;
+            case 'stop':
+                player.pause();
+                Toast.show(`${playerKey} End到達`, 'info');
+                break;
+        }
+    }
+
+    handleBothPlayersEnd() {
+        // Reset flags
+        this.playerAReachedEnd = false;
+        this.playerBReachedEnd = false;
+        
+        switch (this.loopMode) {
+            case 'loop':
+                // Both loop back to start
+                this.resetToStart();
+                this.playBoth();
+                break;
+            case 'continue':
+                // Clear end markers and continue
+                this.playerA.endMarker = null;
+                this.playerB.endMarker = null;
+                this.playerA.updateMarkerDisplay();
+                this.playerB.updateMarkerDisplay();
+                Toast.show('End到達 - 継続再生中', 'info');
+                break;
+            case 'stop':
+                this.pauseBoth();
+                Toast.show('両方End到達 - 停止', 'info');
+                break;
+        }
+    }
+
+    parseTimeInput(value) {
+        if (!value) return 0;
+        const parts = value.split(':').map(p => parseFloat(p) || 0);
+        if (parts.length === 1) return parts[0];
+        if (parts.length === 2) return parts[0] * 60 + parts[1];
+        return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
+    }
+
+    formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    getStartPositionA() {
+        return this.parseTimeInput(this.elements.playerAStartPos?.value || '0:00');
+    }
+
+    getStartPositionB() {
+        return this.parseTimeInput(this.elements.playerBStartPos?.value || '0:00');
+    }
+
+    saveStartPositions() {
+        // Save to player data in project
+        Storage.savePlayerData('A', {
+            startPos: this.elements.playerAStartPos?.value || '0:00'
         });
-
-        // 今すぐ同期
-        this.elements.syncNowBtn.addEventListener('click', () => this.syncNow());
-
-        // オフセットリセット
-        this.elements.resetOffsetBtn.addEventListener('click', () => {
-            this.setOffset(0);
-            Toast.show('オフセットをリセットしました', 'success');
+        Storage.savePlayerData('B', {
+            startPos: this.elements.playerBStartPos?.value || '0:00'
         });
+    }
+
+    playBoth() {
+        const startA = this.getStartPositionA();
+        const startB = this.getStartPositionB();
+
+        if (this.playerA.isReady) {
+            this.playerA.seekTo(startA);
+            this.playerA.play();
+        }
+        if (this.playerB.isReady) {
+            this.playerB.seekTo(startB);
+            this.playerB.play();
+        }
+        Toast.show('両方再生開始', 'success');
+    }
+
+    pauseBoth() {
+        if (this.playerA.isReady) this.playerA.pause();
+        if (this.playerB.isReady) this.playerB.pause();
+        Toast.show('両方停止', 'info');
+    }
+
+    resetToStart() {
+        const startA = this.getStartPositionA();
+        const startB = this.getStartPositionB();
+
+        if (this.playerA.isReady) {
+            this.playerA.pause();
+            this.playerA.seekTo(startA);
+        }
+        if (this.playerB.isReady) {
+            this.playerB.pause();
+            this.playerB.seekTo(startB);
+        }
+        Toast.show('開始位置へ移動', 'info');
+    }
+
+    setMaster(key) {
+        this.masterKey = key;
+        
+        // Update button states
+        this.elements.masterBtnA?.classList.toggle('active', key === 'A');
+        this.elements.masterBtnB?.classList.toggle('active', key === 'B');
+        
+        // Update player container focus
+        this.elements.playerAContainer?.classList.toggle('is-master', key === 'A');
+        this.elements.playerBContainer?.classList.toggle('is-master', key === 'B');
+        
+        this.updateOffsetHint();
+        this.saveSettings();
+        Toast.show(`${key}を基準に設定`, 'success');
+    }
+
+    updateMasterUI() {
+        // Update button states
+        this.elements.masterBtnA?.classList.toggle('active', this.masterKey === 'A');
+        this.elements.masterBtnB?.classList.toggle('active', this.masterKey === 'B');
+        
+        // Update player container focus
+        this.elements.playerAContainer?.classList.toggle('is-master', this.masterKey === 'A');
+        this.elements.playerBContainer?.classList.toggle('is-master', this.masterKey === 'B');
+    }
+
+    getMaster() {
+        return this.masterKey === 'A' ? this.playerA : this.playerB;
+    }
+
+    getSlave() {
+        return this.masterKey === 'A' ? this.playerB : this.playerA;
     }
 
     loadSettings() {
         const settings = Storage.loadSettings();
-        if (settings.syncOffset !== undefined) {
-            this.setOffset(settings.syncOffset, false);
+        if (settings.syncMaster) {
+            this.masterKey = settings.syncMaster;
         }
+        // Load start positions
+        if (settings.startPosA && this.elements.playerAStartPos) {
+            this.elements.playerAStartPos.value = settings.startPosA;
+        }
+        if (settings.startPosB && this.elements.playerBStartPos) {
+            this.elements.playerBStartPos.value = settings.startPosB;
+        }
+        // Load loop mode
+        if (settings.loopMode) {
+            this.loopMode = settings.loopMode;
+            this.elements.loopModeLoop?.classList.toggle('active', this.loopMode === 'loop');
+            this.elements.loopModeContinue?.classList.toggle('active', this.loopMode === 'continue');
+            this.elements.loopModeStop?.classList.toggle('active', this.loopMode === 'stop');
+        }
+        this.updateMasterUI();
         if (settings.syncEnabled) {
             this.enable();
         }
@@ -69,7 +279,7 @@ class SyncController {
     saveSettings() {
         Storage.saveSettings({
             syncEnabled: this.enabled,
-            syncOffset: this.offset
+            syncMaster: this.masterKey
         });
     }
 
@@ -99,90 +309,42 @@ class SyncController {
         Toast.show('同期を無効にしました', 'warning');
     }
 
-    setOffset(value, showToast = true) {
-        this.offset = Math.round(value * 1000) / 1000; // 小数点3桁まで
-        this.elements.offsetInput.value = this.offset;
-        this.saveSettings();
-        
-        if (showToast) {
-            Toast.show(`オフセットを ${this.offset}秒 に設定しました`, 'success');
-        }
-    }
-
-    adjustOffset(delta) {
-        this.setOffset(this.offset + delta);
-    }
-
     /**
-     * プレイヤーAの操作にプレイヤーBを同期させる
-     */
-    syncFromA() {
-        if (!this.enabled || !this.playerA.isReady || !this.playerB.isReady) {
-            return;
-        }
-
-        const timeA = this.playerA.getCurrentTime();
-        const targetTimeB = timeA + this.offset;
-        const currentTimeB = this.playerB.getCurrentTime();
-
-        // 現在位置と目標位置の差が閾値を超えている場合のみシーク
-        if (Math.abs(currentTimeB - targetTimeB) > this.syncThreshold) {
-            this.playerB.seekTo(Math.max(0, targetTimeB));
-        }
-    }
-
-    /**
-     * プレイヤーAの再生/一時停止状態にプレイヤーBを追従させる
+     * マスタープレイヤーの再生/一時停止状態にスレーブを追従させる
      * @param {string} state - 'playing' or 'paused'
      */
     syncPlayState(state) {
-        if (!this.enabled || !this.playerB.isReady) {
+        const slave = this.getSlave();
+        
+        if (!this.enabled || !slave.isReady) {
             return;
         }
 
         if (state === 'playing') {
-            this.syncFromA(); // まず位置を同期
-            this.playerB.play();
+            slave.play();
         } else if (state === 'paused') {
-            this.playerB.pause();
-            this.syncFromA(); // 一時停止後に位置を微調整
+            slave.pause();
         }
     }
 
     /**
-     * 今すぐ同期を実行
-     */
-    syncNow() {
-        if (!this.playerA.isReady || !this.playerB.isReady) {
-            Toast.show('両方のプレイヤーに動画をロードしてください', 'warning');
-            return;
-        }
-
-        const timeA = this.playerA.getCurrentTime();
-        const targetTimeB = timeA + this.offset;
-        this.playerB.seekTo(Math.max(0, targetTimeB));
-
-        // 再生状態も同期
-        if (this.playerA.isPlaying()) {
-            this.playerB.play();
-        } else {
-            this.playerB.pause();
-        }
-
-        Toast.show('同期を実行しました', 'success');
-    }
-
-    /**
-     * プレイヤーAのシーク時にプレイヤーBも追従
-     * @param {number} time - シーク先の時間
+     * マスタープレイヤーのシーク時にスレーブも追従（同期ON時のみ）
      */
     handleSeek(time) {
-        if (!this.enabled || !this.playerB.isReady) {
-            return;
-        }
-
-        const targetTimeB = time + this.offset;
-        this.playerB.seekTo(Math.max(0, targetTimeB));
+        // 同期ONの場合、スレーブも同じ相対位置に移動
+        if (!this.enabled) return;
+        
+        const slave = this.getSlave();
+        const master = this.getMaster();
+        if (!slave.isReady || !master.isReady) return;
+        
+        // 開始位置からの相対位置を計算
+        const masterStart = this.masterKey === 'A' ? this.getStartPositionA() : this.getStartPositionB();
+        const slaveStart = this.masterKey === 'A' ? this.getStartPositionB() : this.getStartPositionA();
+        const relativeTime = time - masterStart;
+        const slaveTime = slaveStart + relativeTime;
+        
+        slave.seekTo(Math.max(0, slaveTime));
     }
 }
 

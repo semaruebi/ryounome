@@ -112,12 +112,31 @@ class CommentsController {
             return;
         }
 
+        // Get start positions from sync panel
+        const startPosA = document.getElementById('playerAStartPos')?.value || '0:00';
+        const startPosB = document.getElementById('playerBStartPos')?.value || '0:00';
+
+        // Get markers from players
+        const playerA = window.app?.playerA;
+        const playerB = window.app?.playerB;
+
         const comment = {
             id: Storage.generateId(),
             videoUrl: '', // 将来的に動画URLを保存する場合用
             timestamp: this.currentTimestamp,
             comment: text,
             playerKey: this.selectedPlayerKey,
+            startPosA: startPosA,
+            startPosB: startPosB,
+            // Auto-capture markers
+            markerA: {
+                start: playerA?.startMarker ?? null,
+                end: playerA?.endMarker ?? null
+            },
+            markerB: {
+                start: playerB?.startMarker ?? null,
+                end: playerB?.endMarker ?? null
+            },
             createdAt: new Date().toISOString()
         };
 
@@ -196,7 +215,33 @@ class CommentsController {
                 item.addEventListener('click', (e) => {
                     // 削除ボタンをクリックした場合は除外
                     if (!e.target.closest('.comment-delete')) {
+                        // Restore start positions to sync panel
+                        const startPosAInput = document.getElementById('playerAStartPos');
+                        const startPosBInput = document.getElementById('playerBStartPos');
+                        if (startPosAInput && comment.startPosA) {
+                            startPosAInput.value = comment.startPosA;
+                        }
+                        if (startPosBInput && comment.startPosB) {
+                            startPosBInput.value = comment.startPosB;
+                        }
+                        
+                        // Restore markers to players
+                        const playerA = window.app?.playerA;
+                        const playerB = window.app?.playerB;
+                        
+                        if (playerA && comment.markerA) {
+                            playerA.startMarker = comment.markerA.start;
+                            playerA.endMarker = comment.markerA.end;
+                            playerA.updateMarkerDisplay();
+                        }
+                        if (playerB && comment.markerB) {
+                            playerB.startMarker = comment.markerB.start;
+                            playerB.endMarker = comment.markerB.end;
+                            playerB.updateMarkerDisplay();
+                        }
+                        
                         this.onCommentClick(comment);
+                        Toast.show('設定を復元しました', 'info');
                     }
                 });
             }
@@ -221,16 +266,40 @@ class CommentsController {
         const badgeClass = comment.playerKey === 'A' ? 'badge-a' : 'badge-b';
         const playerClass = comment.playerKey === 'A' ? 'player-a' : 'player-b';
         
+        // Show start positions
+        const startPosInfo = (comment.startPosA || comment.startPosB) 
+            ? `<div class="comment-startpos">開始 A:${comment.startPosA || '0:00'} B:${comment.startPosB || '0:00'}</div>`
+            : '';
+        
+        // Show markers if available
+        let markerInfo = '';
+        if (comment.markerA || comment.markerB) {
+            const aStart = comment.markerA?.start !== null ? this.formatTimeShort(comment.markerA.start) : '--';
+            const aEnd = comment.markerA?.end !== null ? this.formatTimeShort(comment.markerA.end) : '--';
+            const bStart = comment.markerB?.start !== null ? this.formatTimeShort(comment.markerB.start) : '--';
+            const bEnd = comment.markerB?.end !== null ? this.formatTimeShort(comment.markerB.end) : '--';
+            markerInfo = `<div class="comment-markers">区間 A:${aStart}~${aEnd} B:${bStart}~${bEnd}</div>`;
+        }
+        
         return `
             <li class="comment-item ${playerClass}" data-id="${comment.id}" data-timestamp="${comment.timestamp}">
                 <span class="comment-badge ${badgeClass}">${comment.playerKey}</span>
                 <div class="comment-content">
                     <div class="comment-time">${this.formatTime(comment.timestamp)}</div>
+                    ${startPosInfo}
+                    ${markerInfo}
                     <div class="comment-text">${this.escapeHtml(comment.comment)}</div>
                 </div>
                 <button class="comment-delete" title="削除">🗑️</button>
             </li>
         `;
+    }
+
+    formatTimeShort(seconds) {
+        if (seconds === null || seconds === undefined) return '--';
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
     }
 
     /**

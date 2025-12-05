@@ -119,3 +119,5 @@ RTA走者の皆様、動画分析に興味のあるすべての方々へ感謝�
 
 Made with ❤️ for the RTA community
 
+
+

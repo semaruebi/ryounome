@@ -9,6 +9,7 @@ class VideoPlayer {
         this.type = null;
         this.youtubePlayer = null;
         this.videoUrl = null;
+        this.localFilePath = null; // User-entered file path for local videos
         this.isReady = false;
         this.frameRate = 60; // Default 60fps
         this.startTime = 0;
@@ -72,6 +73,8 @@ class VideoPlayer {
             setEndBtn: document.getElementById(`${p}SetEnd`),
             goStartBtn: document.getElementById(`${p}GoStart`),
             goEndBtn: document.getElementById(`${p}GoEnd`),
+            clearStartBtn: document.getElementById(`${p}ClearStart`),
+            clearEndBtn: document.getElementById(`${p}ClearEnd`),
             startValue: document.getElementById(`${p}StartValue`),
             endValue: document.getElementById(`${p}EndValue`),
             segmentValue: document.getElementById(`${p}Segment`),
@@ -110,6 +113,10 @@ class VideoPlayer {
             if (e.target.files.length > 0) this.loadLocalFile(e.target.files[0]);
         });
 
+        // File picker button (for File System Access API)
+        this.elements.filePickerBtn = document.getElementById(`player${this.key}FilePicker`);
+        this.elements.filePickerBtn?.addEventListener('click', () => this.openFilePicker());
+
         // Drag & Drop
         this.setupDragDrop();
 
@@ -125,6 +132,8 @@ class VideoPlayer {
         this.elements.setEndBtn?.addEventListener('click', () => this.setEndMarker());
         this.elements.goStartBtn?.addEventListener('click', () => this.goToStartMarker());
         this.elements.goEndBtn?.addEventListener('click', () => this.goToEndMarker());
+        this.elements.clearStartBtn?.addEventListener('click', () => this.clearStartMarker());
+        this.elements.clearEndBtn?.addEventListener('click', () => this.clearEndMarker());
 
         // Playback controls
         this.elements.playPauseBtn?.addEventListener('click', () => this.togglePlayPause());
@@ -251,6 +260,18 @@ class VideoPlayer {
         if (!this.isReady) return;
         this.startMarker = this.getCurrentTime();
         this.updateMarkerDisplay();
+        
+        // Also update sync panel start position
+        const syncStartInput = document.getElementById(`player${this.key}StartPos`);
+        if (syncStartInput) {
+            syncStartInput.value = this.formatTimeInput(this.startMarker);
+            // Trigger change event to save
+            syncStartInput.dispatchEvent(new Event('change'));
+        }
+        
+        // Save to project
+        Storage.savePlayerData(this.key, { startMarker: this.startMarker });
+        
         Toast.show('Start marker set', 'success');
     }
     
@@ -258,6 +279,10 @@ class VideoPlayer {
         if (!this.isReady) return;
         this.endMarker = this.getCurrentTime();
         this.updateMarkerDisplay();
+        
+        // Save to project
+        Storage.savePlayerData(this.key, { endMarker: this.endMarker });
+        
         Toast.show('End marker set', 'success');
     }
     
@@ -273,13 +298,27 @@ class VideoPlayer {
         }
     }
     
+    clearStartMarker() {
+        this.startMarker = null;
+        this.updateMarkerDisplay();
+        Storage.savePlayerData(this.key, { startMarker: null });
+        Toast.show('Start cleared', 'info');
+    }
+    
+    clearEndMarker() {
+        this.endMarker = null;
+        this.updateMarkerDisplay();
+        Storage.savePlayerData(this.key, { endMarker: null });
+        Toast.show('End cleared', 'info');
+    }
+    
     updateMarkerDisplay() {
         // Update start marker display
         if (this.elements.startValue) {
             if (this.startMarker !== null) {
                 this.elements.startValue.textContent = this.formatTimeWithFrames(this.startMarker);
             } else {
-                this.elements.startValue.textContent = '--:--:--:--';
+                this.elements.startValue.textContent = '--:--:--';
             }
         }
         
@@ -288,7 +327,7 @@ class VideoPlayer {
             if (this.endMarker !== null) {
                 this.elements.endValue.textContent = this.formatTimeWithFrames(this.endMarker);
             } else {
-                this.elements.endValue.textContent = '--:--:--:--';
+                this.elements.endValue.textContent = '--:--:--';
             }
         }
         
@@ -428,15 +467,32 @@ class VideoPlayer {
     updatePlayhead(percent) {
         if (this.elements.playhead) {
             this.elements.playhead.style.left = `${percent * 100}%`;
+            this.elements.playhead.classList.add('active');
         }
         
-        // Highlight active thumbnail
+        // Highlight active thumbnail and scroll strip
         const thumbs = this.elements.thumbnailsContainer?.querySelectorAll('.thumbnail-item');
-        if (thumbs && thumbs.length > 0) {
+        const container = this.elements.thumbnailsContainer;
+        
+        if (thumbs && thumbs.length > 0 && container) {
             const activeIndex = Math.floor(percent * thumbs.length);
+            const clampedIndex = Math.max(0, Math.min(activeIndex, thumbs.length - 1));
+            
             thumbs.forEach((thumb, i) => {
-                thumb.classList.toggle('active', i === activeIndex);
+                thumb.classList.toggle('active', i === clampedIndex);
             });
+            
+            // Scroll thumbnail strip to keep active thumb visible
+            const strip = this.elements.thumbnailStrip;
+            if (strip && thumbs[clampedIndex]) {
+                const thumbEl = thumbs[clampedIndex];
+                const stripRect = strip.getBoundingClientRect();
+                const thumbRect = thumbEl.getBoundingClientRect();
+                
+                // Center the active thumbnail
+                const scrollLeft = thumbEl.offsetLeft - (stripRect.width / 2) + (thumbRect.width / 2);
+                container.style.transform = `translateX(${-Math.max(0, scrollLeft)}px)`;
+            }
         }
     }
     
@@ -639,6 +695,12 @@ class VideoPlayer {
         this.type = 'youtube';
         this.videoUrl = originalUrl;
 
+        // Save to project
+        Storage.savePlayerData(this.key, {
+            source: originalUrl,
+            sourceType: 'youtube'
+        });
+
         this.elements.placeholder.style.display = 'none';
         this.elements.video.style.display = 'none';
         
@@ -726,10 +788,74 @@ class VideoPlayer {
         Toast.show(`YouTube: ${errors[event.data] || 'エラー'}`, 'error');
     }
 
+    // File System Access API - for saving file handles
+    async openFilePicker() {
+        // Check if File System Access API is supported
+        if (!('showOpenFilePicker' in window)) {
+            Toast.show('このブラウザはFile System Access APIをサポートしていません', 'warning');
+            this.elements.fileInput?.click();
+            return;
+        }
+
+        try {
+            const [fileHandle] = await window.showOpenFilePicker({
+                types: [{
+                    description: 'Video Files',
+                    accept: { 'video/*': ['.mp4', '.webm', '.mkv', '.avi', '.mov'] }
+                }]
+            });
+
+            // Store file handle for later use
+            this.fileHandle = fileHandle;
+            const file = await fileHandle.getFile();
+            
+            // Save file handle name (can be used to identify the file)
+            this.loadLocalFileWithHandle(file, fileHandle.name);
+            
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('File picker error:', err);
+                Toast.show('ファイル選択エラー', 'error');
+            }
+        }
+    }
+
+    loadLocalFileWithHandle(file, handleName) {
+        this.cleanup();
+        this.type = 'local';
+        this.videoUrl = handleName || file.name;
+
+        // Save to project with handle info
+        Storage.savePlayerData(this.key, {
+            source: handleName || file.name,
+            sourceType: 'local',
+            hasFileHandle: !!this.fileHandle
+        });
+
+        this.elements.placeholder.style.display = 'none';
+        this.elements.youtubeContainer.style.display = 'none';
+        this.elements.video.style.display = 'block';
+
+        const url = URL.createObjectURL(file);
+        this.elements.video.src = url;
+        this.elements.video.preload = 'auto';
+        this.elements.video.load();
+        
+        Toast.show(`${file.name} 読込中...`, 'info');
+    }
+
     loadLocalFile(file) {
         this.cleanup();
         this.type = 'local';
         this.videoUrl = file.name;
+        this.fileHandle = null; // No file handle from regular input
+
+        // Save to project
+        Storage.savePlayerData(this.key, {
+            source: file.name,
+            sourceType: 'local',
+            hasFileHandle: false
+        });
 
         this.elements.placeholder.style.display = 'none';
         this.elements.youtubeContainer.style.display = 'none';
@@ -775,6 +901,25 @@ class VideoPlayer {
             const percent = time / duration;
             this.updateSeekbarUI(percent);
             this.updatePlayhead(percent);
+        }
+        
+        // Check end marker - notify sync controller
+        if (this.endMarker !== null && this.isPlaying()) {
+            if (time >= this.endMarker) {
+                // Notify sync controller if available
+                if (window.app?.syncController) {
+                    window.app.syncController.handleEndReached(this.key);
+                } else {
+                    // No sync controller, handle locally
+                    if (this.startMarker !== null) {
+                        this.seekTo(this.startMarker);
+                    } else {
+                        this.pause();
+                        this.seekTo(this.endMarker);
+                        Toast.show('End marker reached', 'info');
+                    }
+                }
+            }
         }
         
         this.updateVolumeIcon();
@@ -931,6 +1076,7 @@ class VideoPlayer {
         this.isReady = false;
         this.type = null;
         this.videoUrl = null;
+        this.localFilePath = null;
     }
 }
 
