@@ -113,9 +113,11 @@ class VideoPlayer {
             if (e.target.files.length > 0) this.loadLocalFile(e.target.files[0]);
         });
 
-        // File picker button (for File System Access API)
-        this.elements.filePickerBtn = document.getElementById(`player${this.key}FilePicker`);
-        this.elements.filePickerBtn?.addEventListener('click', () => this.openFilePicker());
+        // File picker button (for File System Access API) - removed, using reloadFile instead
+        
+        // Reload file button - opens file picker with path hint
+        this.elements.reloadFileBtn = document.getElementById(`player${this.key}ReloadFile`);
+        this.elements.reloadFileBtn?.addEventListener('click', () => this.promptFileSelection());
 
         // Drag & Drop
         this.setupDragDrop();
@@ -786,6 +788,20 @@ class VideoPlayer {
     handleYoutubeError(event) {
         const errors = { 2: '無効なパラメータ', 100: '動画なし', 101: '埋め込み不可', 150: '埋め込み不可' };
         Toast.show(`YouTube: ${errors[event.data] || 'エラー'}`, 'error');
+    }
+
+    // Prompt user to select file (with path hint from saved project)
+    promptFileSelection() {
+        const savedPath = this.elements.urlInput?.value.trim();
+        
+        if (savedPath && !savedPath.startsWith('http')) {
+            // Show hint about which file to select
+            const fileName = savedPath.split(/[\\\/]/).pop(); // Get filename from path
+            Toast.show(`"${fileName}" を選択してください`, 'info', 5000);
+        }
+        
+        // Open file picker
+        this.openFilePicker();
     }
 
     // File System Access API - for saving file handles

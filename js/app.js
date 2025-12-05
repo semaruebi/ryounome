@@ -407,9 +407,9 @@ class App {
                 } else if (playerAData.sourceType === 'local') {
                     // Restore stored path
                     this.playerA.localFilePath = playerAData.source;
-                    // Prompt to select local file
-                    Toast.show(`A: "${playerAData.source}" を選択してください`, 'warning', 4000);
-                    this.playerA.elements.fileInput?.click();
+                    // Show hint - user needs to click "選択" button
+                    const fileName = playerAData.source.split(/[\\\/]/).pop();
+                    Toast.show(`A: 「📂 選択」をクリックして "${fileName}" を選択`, 'info', 5000);
                 }
             }
         }
@@ -434,11 +434,11 @@ class App {
                 } else if (playerBData.sourceType === 'local') {
                     // Restore stored path
                     this.playerB.localFilePath = playerBData.source;
-                    // Prompt to select local file
+                    // Show hint - user needs to click "選択" button
+                    const fileName = playerBData.source.split(/[\\\/]/).pop();
                     setTimeout(() => {
-                        Toast.show(`B: "${playerBData.source}" を選択してください`, 'warning', 4000);
-                        this.playerB.elements.fileInput?.click();
-                    }, 1000);
+                        Toast.show(`B: 「📂 選択」をクリックして "${fileName}" を選択`, 'info', 5000);
+                    }, 500);
                 }
             }
         }

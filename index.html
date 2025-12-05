@@ -102,13 +102,11 @@
                     <div class="player-controls">
                         <div class="control-row">
                             <div class="input-group">
-                                <input type="text" id="playerAUrl" class="input-url" placeholder="YouTube URL...">
+                                <input type="text" id="playerAUrl" class="input-url" placeholder="YouTube URL or ファイルパス...">
                                 <button class="btn btn-primary" id="playerALoadBtn">読込</button>
+                                <button class="btn btn-secondary" id="playerAReloadFile" title="このパスのファイルを選択">📂 選択</button>
                             </div>
-                            <label class="btn btn-secondary file-input-label" title="ファイル選択（従来方式）">
-                                📁 <input type="file" id="playerAFile" accept="video/*" hidden>
-                            </label>
-                            <button class="btn btn-secondary" id="playerAFilePicker" title="ファイル選択（パス保存）">📂</button>
+                            <input type="file" id="playerAFile" accept="video/*" hidden>
                             <div class="fps-select">
                                 <select id="playerAFps" class="speed-select">
                                     <option value="30">30fps</option>
@@ -230,13 +228,11 @@
                     <div class="player-controls">
                         <div class="control-row">
                             <div class="input-group">
-                                <input type="text" id="playerBUrl" class="input-url" placeholder="YouTube URL...">
+                                <input type="text" id="playerBUrl" class="input-url" placeholder="YouTube URL or ファイルパス...">
                                 <button class="btn btn-primary" id="playerBLoadBtn">読込</button>
+                                <button class="btn btn-secondary" id="playerBReloadFile" title="このパスのファイルを選択">📂 選択</button>
                             </div>
-                            <label class="btn btn-secondary file-input-label" title="ファイル選択（従来方式）">
-                                📁 <input type="file" id="playerBFile" accept="video/*" hidden>
-                            </label>
-                            <button class="btn btn-secondary" id="playerBFilePicker" title="ファイル選択（パス保存）">📂</button>
+                            <input type="file" id="playerBFile" accept="video/*" hidden>
                             <div class="fps-select">
                                 <select id="playerBFps" class="speed-select">
                                     <option value="30">30fps</option>
