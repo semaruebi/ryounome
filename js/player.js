@@ -30,6 +30,9 @@ class VideoPlayer {
         this.previewCanvas = null;
         this.previewCtx = null;
         
+        // YouTube container ID
+        this.youtubeContainerId = `player${this.key}Youtube`;
+        
         this.initElements();
         this.bindEvents();
         this.loadSavedName();
@@ -164,9 +167,77 @@ class VideoPlayer {
         });
     }
 
+    setupDragDrop() {
+        const screen = this.elements.screen;
+        const dropzone = this.elements.dropzone;
+        const container = this.elements.container;
+
+        // 画面全体でドラッグを検知
+        screen.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add('active');
+        });
+
+        screen.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        screen.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // 子要素へのドラッグでは非表示にしない
+            if (e.relatedTarget && screen.contains(e.relatedTarget)) {
+                return;
+            }
+            dropzone.classList.remove('active');
+        });
+
+        screen.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('active');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('video/')) {
+                    this.loadLocalFile(file);
+                } else {
+                    Toast.show('動画ファイルをドロップしてください', 'error');
+                }
+            }
+        });
+
+        // コンテナ全体でも対応
+        container.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+        });
+
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        container.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('active');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('video/')) {
+                    this.loadLocalFile(file);
+                }
+            }
+        });
+    }
+
     setupOverlaySeekbar() {
         const wrapper = this.elements.seekWrapper;
         const overlay = this.elements.seekOverlay;
+        
+        if (!wrapper || !overlay) return;
         
         let isDragging = false;
         
@@ -190,6 +261,7 @@ class VideoPlayer {
         wrapper.addEventListener('mousedown', (e) => {
             if (!this.isReady) return;
             e.preventDefault();
+            e.stopPropagation();
             
             isDragging = true;
             this.isSeeking = true;
@@ -227,16 +299,13 @@ class VideoPlayer {
             this.updateSeekbarUI(percent);
             this.updatePreview(percent, time);
         });
-        
-        // ホバー時のオーバーレイ表示を維持
-        this.elements.screen.addEventListener('mouseenter', () => {
-            // CSS hover handles this
-        });
     }
     
     updatePreview(percent, time) {
         const preview = this.elements.seekPreview;
         const wrapper = this.elements.seekWrapper;
+        if (!preview || !wrapper) return;
+        
         const rect = wrapper.getBoundingClientRect();
         
         // プレビューの位置を更新
@@ -246,7 +315,9 @@ class VideoPlayer {
         preview.style.left = `${clampedX}px`;
         
         // 時間表示を更新
-        this.elements.previewTime.textContent = this.formatTimeShort(time);
+        if (this.elements.previewTime) {
+            this.elements.previewTime.textContent = this.formatTimeShort(time);
+        }
         
         // サムネイルプレビューを生成（ローカル動画のみ）
         if (this.type === 'local' && this.elements.video && this.previewCtx) {
@@ -258,11 +329,7 @@ class VideoPlayer {
         const video = this.elements.video;
         if (!video || video.readyState < 2) return;
         
-        // 別のビデオ要素を使用してサムネイルを生成
-        // （メインビデオの再生位置を変えないため）
-        // パフォーマンスのため、シーク中は生成をスキップ
         if (this.isSeeking) {
-            // 現在のフレームを描画
             try {
                 this.previewCtx.drawImage(video, 0, 0, 160, 90);
             } catch (e) {
@@ -273,12 +340,16 @@ class VideoPlayer {
     
     updateSeekbarUI(percent) {
         // プログレスバーの更新
-        this.elements.seekProgress.style.width = `${percent * 100}%`;
+        if (this.elements.seekProgress) {
+            this.elements.seekProgress.style.width = `${percent * 100}%`;
+        }
         
         // サムの位置更新
-        const wrapper = this.elements.seekWrapper;
-        const rect = wrapper.getBoundingClientRect();
-        this.elements.seekThumb.style.left = `${percent * rect.width}px`;
+        if (this.elements.seekThumb && this.elements.seekWrapper) {
+            const wrapper = this.elements.seekWrapper;
+            const rect = wrapper.getBoundingClientRect();
+            this.elements.seekThumb.style.left = `${percent * rect.width}px`;
+        }
     }
     
     updateBuffer() {
@@ -288,7 +359,7 @@ class VideoPlayer {
         if (video.buffered.length > 0) {
             const bufferedEnd = video.buffered.end(video.buffered.length - 1);
             const duration = video.duration;
-            if (duration > 0) {
+            if (duration > 0 && this.elements.seekBuffer) {
                 this.elements.seekBuffer.style.width = `${(bufferedEnd / duration) * 100}%`;
             }
         }
@@ -310,7 +381,9 @@ class VideoPlayer {
                 label = ind.label;
             }
         }
-        this.elements.zoomIndicator.textContent = label;
+        if (this.elements.zoomIndicator) {
+            this.elements.zoomIndicator.textContent = label;
+        }
     }
 
     throttledTimeUpdate() {
@@ -367,39 +440,12 @@ class VideoPlayer {
         }
     }
 
-    setupDragDrop() {
-        const container = this.elements.container;
-        const dropzone = this.elements.dropzone;
-
-        container.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            dropzone.classList.add('active');
-        });
-
-        container.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-
-        container.addEventListener('dragleave', (e) => {
-            if (!container.contains(e.relatedTarget)) {
-                dropzone.classList.remove('active');
-            }
-        });
-
-        container.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropzone.classList.remove('active');
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0 && files[0].type.startsWith('video/')) {
-                this.loadLocalFile(files[0]);
-            }
-        });
-    }
-
     loadFromUrl() {
         const url = this.elements.urlInput.value.trim();
-        if (!url) return;
+        if (!url) {
+            Toast.show('URLを入力してください', 'warning');
+            return;
+        }
 
         const videoId = this.extractYoutubeId(url);
         if (videoId) {
@@ -429,6 +475,9 @@ class VideoPlayer {
 
         this.elements.placeholder.style.display = 'none';
         this.elements.video.style.display = 'none';
+        
+        // YouTubeコンテナを再作成（APIが要素を置き換えるため）
+        this.recreateYoutubeContainer();
         this.elements.youtubeContainer.style.display = 'block';
 
         if (typeof YT === 'undefined' || !YT.Player) {
@@ -444,12 +493,38 @@ class VideoPlayer {
         }
     }
 
+    recreateYoutubeContainer() {
+        // 古いコンテナを削除して新しいdivを作成
+        const oldContainer = this.elements.youtubeContainer;
+        if (oldContainer) {
+            const parent = oldContainer.parentElement;
+            const newContainer = document.createElement('div');
+            newContainer.id = this.youtubeContainerId;
+            newContainer.className = 'youtube-player';
+            newContainer.style.display = 'none';
+            
+            // シークバーオーバーレイの前に挿入
+            const seekOverlay = parent.querySelector('.seekbar-overlay');
+            if (seekOverlay) {
+                parent.insertBefore(newContainer, seekOverlay);
+            } else {
+                parent.appendChild(newContainer);
+            }
+            
+            oldContainer.remove();
+            this.elements.youtubeContainer = newContainer;
+        }
+    }
+
     createYoutubePlayer(videoId) {
         if (this.youtubePlayer) {
-            this.youtubePlayer.destroy();
+            try {
+                this.youtubePlayer.destroy();
+            } catch (e) {}
+            this.youtubePlayer = null;
         }
 
-        this.youtubePlayer = new YT.Player(this.elements.youtubeContainer.id, {
+        this.youtubePlayer = new YT.Player(this.youtubeContainerId, {
             videoId: videoId,
             playerVars: {
                 autoplay: 0,
@@ -470,12 +545,13 @@ class VideoPlayer {
 
     handleYoutubeReady(event) {
         this.isReady = true;
-        this.elements.youtubeContainer.style.display = 'block';
         this.startTimeUpdateLoop();
         
         // 動画の長さを表示
         const duration = this.getDuration();
-        this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
+        if (this.elements.durationDisplay) {
+            this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
+        }
         
         if (this.startTime > 0) {
             this.seekTo(this.startTime);
@@ -521,6 +597,9 @@ class VideoPlayer {
         this.elements.video.src = url;
         this.videoElement = this.elements.video;
         this.elements.video.preload = 'auto';
+        this.elements.video.load();
+        
+        Toast.show(`${file.name} を読み込み中...`, 'info');
     }
 
     handleVideoLoaded() {
@@ -528,7 +607,9 @@ class VideoPlayer {
         
         // 動画の長さを表示
         const duration = this.getDuration();
-        this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
+        if (this.elements.durationDisplay) {
+            this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
+        }
         
         if (this.startTime > 0) {
             this.seekTo(this.startTime);
@@ -543,8 +624,12 @@ class VideoPlayer {
         const duration = this.getDuration();
         
         // 時間表示更新
-        this.elements.timeDisplay.textContent = this.formatTime(currentTime);
-        this.elements.currentTimeDisplay.textContent = this.formatTimeShort(currentTime);
+        if (this.elements.timeDisplay) {
+            this.elements.timeDisplay.textContent = this.formatTime(currentTime);
+        }
+        if (this.elements.currentTimeDisplay) {
+            this.elements.currentTimeDisplay.textContent = this.formatTimeShort(currentTime);
+        }
         
         // シークバー更新（ドラッグ中でなければ）
         if (duration > 0 && !this.isSeeking) {
@@ -561,15 +646,19 @@ class VideoPlayer {
         let icon = '🔊';
         if (volume === 0) icon = '🔇';
         else if (volume < 50) icon = '🔉';
-        this.elements.volumeIcon.textContent = icon;
+        if (this.elements.volumeIcon) {
+            this.elements.volumeIcon.textContent = icon;
+        }
     }
 
     handleStateChange(state) {
         const icon = this.elements.playPauseBtn.querySelector('.play-icon');
-        if (state === 'playing') {
-            icon.textContent = '⏸️';
-        } else {
-            icon.textContent = '▶️';
+        if (icon) {
+            if (state === 'playing') {
+                icon.textContent = '⏸️';
+            } else {
+                icon.textContent = '▶️';
+            }
         }
 
         this.onStateChange(state, this);
@@ -634,7 +723,11 @@ class VideoPlayer {
         if (!this.isReady) return 0;
 
         if (this.type === 'youtube' && this.youtubePlayer) {
-            return this.youtubePlayer.getCurrentTime() || 0;
+            try {
+                return this.youtubePlayer.getCurrentTime() || 0;
+            } catch (e) {
+                return 0;
+            }
         } else if (this.type === 'local' && this.elements.video) {
             return this.elements.video.currentTime || 0;
         }
@@ -645,7 +738,11 @@ class VideoPlayer {
         if (!this.isReady) return 0;
 
         if (this.type === 'youtube' && this.youtubePlayer) {
-            return this.youtubePlayer.getDuration() || 0;
+            try {
+                return this.youtubePlayer.getDuration() || 0;
+            } catch (e) {
+                return 0;
+            }
         } else if (this.type === 'local' && this.elements.video) {
             return this.elements.video.duration || 0;
         }
@@ -655,7 +752,10 @@ class VideoPlayer {
     seekTo(time) {
         if (!this.isReady) return;
 
-        time = Math.max(0, Math.min(time, this.getDuration()));
+        const duration = this.getDuration();
+        if (duration === 0) return;
+        
+        time = Math.max(0, Math.min(time, duration));
 
         if (this.type === 'youtube' && this.youtubePlayer) {
             this.youtubePlayer.seekTo(time, true);
@@ -676,11 +776,9 @@ class VideoPlayer {
     }
 
     setVolume(volume) {
-        if (!this.isReady) return;
-
         volume = Math.max(0, Math.min(1, volume));
 
-        if (this.type === 'youtube' && this.youtubePlayer) {
+        if (this.type === 'youtube' && this.youtubePlayer && this.isReady) {
             this.youtubePlayer.setVolume(volume * 100);
         } else if (this.type === 'local' && this.elements.video) {
             this.elements.video.volume = volume;
@@ -700,6 +798,7 @@ class VideoPlayer {
     }
 
     formatTime(seconds) {
+        if (isNaN(seconds)) seconds = 0;
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
         const s = Math.floor(seconds % 60);
@@ -709,6 +808,7 @@ class VideoPlayer {
     }
 
     formatTimeShort(seconds) {
+        if (isNaN(seconds)) seconds = 0;
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
         const s = Math.floor(seconds % 60);
@@ -722,6 +822,7 @@ class VideoPlayer {
     cleanup() {
         if (this.timeUpdateInterval) {
             clearInterval(this.timeUpdateInterval);
+            this.timeUpdateInterval = null;
         }
 
         if (this.youtubePlayer) {
@@ -733,17 +834,29 @@ class VideoPlayer {
             this.youtubePlayer = null;
         }
 
-        if (this.elements.video.src) {
+        if (this.elements.video && this.elements.video.src) {
+            this.elements.video.pause();
             URL.revokeObjectURL(this.elements.video.src);
             this.elements.video.src = '';
+            this.elements.video.load();
         }
 
         // Reset seekbar UI
-        this.elements.seekProgress.style.width = '0%';
-        this.elements.seekBuffer.style.width = '0%';
-        this.elements.seekThumb.style.left = '0px';
-        this.elements.currentTimeDisplay.textContent = '0:00';
-        this.elements.durationDisplay.textContent = '0:00';
+        if (this.elements.seekProgress) {
+            this.elements.seekProgress.style.width = '0%';
+        }
+        if (this.elements.seekBuffer) {
+            this.elements.seekBuffer.style.width = '0%';
+        }
+        if (this.elements.seekThumb) {
+            this.elements.seekThumb.style.left = '0px';
+        }
+        if (this.elements.currentTimeDisplay) {
+            this.elements.currentTimeDisplay.textContent = '0:00';
+        }
+        if (this.elements.durationDisplay) {
+            this.elements.durationDisplay.textContent = '0:00';
+        }
 
         this.isReady = false;
         this.type = null;
