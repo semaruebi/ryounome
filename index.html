@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RyounoMe - RTA動画比較・分析ツール</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="logo">
+                <span class="logo-icon">👁️</span>
+                <span class="logo-text">RyounoMe</span>
+                <span class="logo-subtitle">RTA Video Analyzer</span>
+            </h1>
+            <nav class="header-nav">
+                <button class="btn btn-ghost" id="importBtn" title="データをインポート">
+                    <span class="btn-icon">📥</span>
+                    <span class="btn-label">Import</span>
+                </button>
+                <button class="btn btn-ghost" id="exportBtn" title="データをエクスポート">
+                    <span class="btn-icon">📤</span>
+                    <span class="btn-label">Export</span>
+                </button>
+                <button class="btn btn-ghost" id="helpBtn" title="ヘルプ">
+                    <span class="btn-icon">❓</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Video Players Section -->
+        <section class="players-section">
+            <!-- Player A (Main) -->
+            <div class="player-container" id="playerAContainer">
+                <div class="player-header">
+                    <span class="player-badge player-badge-a">A</span>
+                    <span class="player-label">メインプレイヤー</span>
+                    <span class="player-time" id="playerATime">00:00:00.000</span>
+                </div>
+                <div class="player-wrapper">
+                    <div class="player-screen" id="playerAScreen">
+                        <div class="player-placeholder" id="playerAPlaceholder">
+                            <div class="placeholder-content">
+                                <span class="placeholder-icon">🎬</span>
+                                <p>動画をロードしてください</p>
+                            </div>
+                        </div>
+                        <video id="playerAVideo" class="video-element" style="display: none;"></video>
+                        <div id="playerAYoutube" class="youtube-player" style="display: none;"></div>
+                    </div>
+                    <div class="player-dropzone" id="playerADropzone">
+                        <p>ここにドラッグ＆ドロップ</p>
+                    </div>
+                </div>
+                <div class="player-controls">
+                    <div class="control-row">
+                        <div class="input-group">
+                            <input type="text" id="playerAUrl" class="input-url" placeholder="YouTube URLを入力...">
+                            <button class="btn btn-primary" id="playerALoadBtn">読込</button>
+                        </div>
+                        <label class="btn btn-secondary file-input-label">
+                            <span>📁 ファイル選択</span>
+                            <input type="file" id="playerAFile" accept="video/*" hidden>
+                        </label>
+                    </div>
+                    <div class="control-row playback-controls">
+                        <button class="btn btn-icon" id="playerAFrameBack" title="1フレーム戻る (←)">
+                            <span>⏮️</span>
+                        </button>
+                        <button class="btn btn-icon btn-large" id="playerAPlayPause" title="再生/一時停止 (Space)">
+                            <span class="play-icon">▶️</span>
+                        </button>
+                        <button class="btn btn-icon" id="playerAFrameForward" title="1フレーム進む (→)">
+                            <span>⏭️</span>
+                        </button>
+                        <div class="volume-control">
+                            <span class="volume-icon">🔊</span>
+                            <input type="range" id="playerAVolume" class="volume-slider" min="0" max="100" value="100">
+                        </div>
+                        <div class="speed-control">
+                            <label>速度:</label>
+                            <select id="playerASpeed" class="speed-select">
+                                <option value="0.25">0.25x</option>
+                                <option value="0.5">0.5x</option>
+                                <option value="1" selected>1x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2x</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="seekbar-container">
+                        <input type="range" id="playerASeek" class="seekbar" min="0" max="100" value="0" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player B (Sub) -->
+            <div class="player-container" id="playerBContainer">
+                <div class="player-header">
+                    <span class="player-badge player-badge-b">B</span>
+                    <span class="player-label">サブプレイヤー</span>
+                    <span class="player-time" id="playerBTime">00:00:00.000</span>
+                </div>
+                <div class="player-wrapper">
+                    <div class="player-screen" id="playerBScreen">
+                        <div class="player-placeholder" id="playerBPlaceholder">
+                            <div class="placeholder-content">
+                                <span class="placeholder-icon">🎬</span>
+                                <p>動画をロードしてください</p>
+                            </div>
+                        </div>
+                        <video id="playerBVideo" class="video-element" style="display: none;"></video>
+                        <div id="playerBYoutube" class="youtube-player" style="display: none;"></div>
+                    </div>
+                    <div class="player-dropzone" id="playerBDropzone">
+                        <p>ここにドラッグ＆ドロップ</p>
+                    </div>
+                </div>
+                <div class="player-controls">
+                    <div class="control-row">
+                        <div class="input-group">
+                            <input type="text" id="playerBUrl" class="input-url" placeholder="YouTube URLを入力...">
+                            <button class="btn btn-primary" id="playerBLoadBtn">読込</button>
+                        </div>
+                        <label class="btn btn-secondary file-input-label">
+                            <span>📁 ファイル選択</span>
+                            <input type="file" id="playerBFile" accept="video/*" hidden>
+                        </label>
+                    </div>
+                    <div class="control-row playback-controls">
+                        <button class="btn btn-icon" id="playerBFrameBack" title="1フレーム戻る">
+                            <span>⏮️</span>
+                        </button>
+                        <button class="btn btn-icon btn-large" id="playerBPlayPause" title="再生/一時停止">
+                            <span class="play-icon">▶️</span>
+                        </button>
+                        <button class="btn btn-icon" id="playerBFrameForward" title="1フレーム進む">
+                            <span>⏭️</span>
+                        </button>
+                        <div class="volume-control">
+                            <span class="volume-icon">🔊</span>
+                            <input type="range" id="playerBVolume" class="volume-slider" min="0" max="100" value="100">
+                        </div>
+                        <div class="speed-control">
+                            <label>速度:</label>
+                            <select id="playerBSpeed" class="speed-select">
+                                <option value="0.25">0.25x</option>
+                                <option value="0.5">0.5x</option>
+                                <option value="1" selected>1x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2x</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="seekbar-container">
+                        <input type="range" id="playerBSeek" class="seekbar" min="0" max="100" value="0" step="0.01">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sync Control Panel -->
+        <section class="sync-panel">
+            <div class="sync-panel-content">
+                <div class="sync-toggle">
+                    <button class="btn btn-sync" id="syncToggle">
+                        <span class="sync-icon">🔗</span>
+                        <span class="sync-label">同期</span>
+                        <span class="sync-status" id="syncStatus">OFF</span>
+                    </button>
+                </div>
+                <div class="sync-offset">
+                    <label class="offset-label">オフセット (秒):</label>
+                    <div class="offset-controls">
+                        <button class="btn btn-small" id="offsetMinus1">-1</button>
+                        <button class="btn btn-small" id="offsetMinus01">-0.1</button>
+                        <input type="number" id="syncOffsetInput" class="offset-input" value="0" step="0.001">
+                        <button class="btn btn-small" id="offsetPlus01">+0.1</button>
+                        <button class="btn btn-small" id="offsetPlus1">+1</button>
+                    </div>
+                    <p class="offset-hint">プレイヤーBは A + オフセット の位置に同期</p>
+                </div>
+                <div class="sync-actions">
+                    <button class="btn btn-ghost" id="syncNowBtn" title="現在位置で同期">
+                        <span>⚡</span> 今すぐ同期
+                    </button>
+                    <button class="btn btn-ghost" id="resetOffsetBtn" title="オフセットをリセット">
+                        <span>🔄</span> リセット
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Comments Section -->
+        <section class="comments-section">
+            <div class="comments-header">
+                <h2 class="section-title">
+                    <span class="title-icon">💬</span>
+                    タイムスタンプコメント
+                </h2>
+                <div class="comments-actions">
+                    <button class="btn btn-ghost btn-small" id="clearCommentsBtn" title="全コメントを削除">
+                        <span>🗑️</span> クリア
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Comment Input -->
+            <div class="comment-input-area">
+                <div class="comment-input-row">
+                    <div class="comment-player-select">
+                        <label>対象:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="commentPlayer" value="A" checked>
+                                <span class="radio-badge badge-a">A</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="commentPlayer" value="B">
+                                <span class="radio-badge badge-b">B</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="comment-timestamp">
+                        <span class="timestamp-label">タイムスタンプ:</span>
+                        <span class="timestamp-value" id="currentTimestamp">00:00:00.000</span>
+                        <button class="btn btn-small btn-ghost" id="captureTimestampBtn" title="現在時刻をキャプチャ">📍</button>
+                    </div>
+                </div>
+                <div class="comment-input-row">
+                    <textarea id="commentInput" class="comment-textarea" placeholder="コメントを入力... (Ctrl+Enter で投稿)"></textarea>
+                    <button class="btn btn-primary" id="postCommentBtn">
+                        <span>📝</span> 投稿
+                    </button>
+                </div>
+            </div>
+
+            <!-- Comments List -->
+            <div class="comments-list-container">
+                <div class="comments-filter">
+                    <label>フィルター:</label>
+                    <select id="commentsFilter" class="filter-select">
+                        <option value="all">すべて</option>
+                        <option value="A">プレイヤーA のみ</option>
+                        <option value="B">プレイヤーB のみ</option>
+                    </select>
+                </div>
+                <ul class="comments-list" id="commentsList">
+                    <!-- Comments will be rendered here -->
+                    <li class="comment-empty">
+                        <p>コメントはまだありません</p>
+                        <p class="hint">動画を再生しながらコメントを追加してみましょう！</p>
+                    </li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <!-- Help Modal -->
+    <div class="modal" id="helpModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>❓ ヘルプ - RyounoMe の使い方</h2>
+                <button class="btn btn-icon modal-close" id="closeHelpModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <h3>🎬 動画のロード</h3>
+                <ul>
+                    <li><strong>YouTube:</strong> URLを入力して「読込」ボタンをクリック</li>
+                    <li><strong>ローカルファイル:</strong> 「ファイル選択」ボタンまたはドラッグ＆ドロップ</li>
+                </ul>
+
+                <h3>⌨️ キーボードショートカット</h3>
+                <table class="shortcut-table">
+                    <tr><td><kbd>Space</kbd></td><td>再生/一時停止 (メインプレイヤー)</td></tr>
+                    <tr><td><kbd>←</kbd></td><td>1フレーム戻る</td></tr>
+                    <tr><td><kbd>→</kbd></td><td>1フレーム進む</td></tr>
+                    <tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>コメント投稿</td></tr>
+                    <tr><td><kbd>S</kbd></td><td>同期 ON/OFF</td></tr>
+                </table>
+
+                <h3>🔗 同期機能</h3>
+                <p>同期をONにすると、プレイヤーAの操作にプレイヤーBが追従します。
+                オフセットを設定すると、時間差を考慮して同期します。</p>
+
+                <h3>💬 コメント機能</h3>
+                <p>現在の再生位置にコメントを追加できます。
+                コメントをクリックすると、その時点にジャンプします。</p>
+
+                <h3>💾 データ管理</h3>
+                <p>コメントはブラウザのlocalStorageに保存されます。
+                Export/Importでデータのバックアップと復元が可能です。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Hidden file input for import -->
+    <input type="file" id="importFileInput" accept=".json" hidden>
+
+    <!-- YouTube IFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+    
+    <!-- App Scripts -->
+    <script src="js/storage.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/sync.js"></script>
+    <script src="js/comments.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+
