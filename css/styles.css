@@ -474,11 +474,12 @@ body::before {
 /* Thumbnail Strip */
 .thumbnail-strip {
     position: relative;
-    height: 40px;
+    height: 48px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 4px;
     overflow: hidden;
     margin-bottom: var(--spacing-sm);
+    cursor: pointer;
 }
 
 .thumbnail-strip-inner {
@@ -487,6 +488,7 @@ body::before {
     position: absolute;
     left: 0;
     top: 0;
+    width: 100%;
 }
 
 .thumbnail-item {
@@ -495,14 +497,60 @@ body::before {
     background-size: cover;
     background-position: center;
     border-right: 1px solid rgba(0, 0, 0, 0.3);
+    opacity: 0.7;
+    transition: opacity 0.1s;
+}
+
+.thumbnail-item.active {
+    opacity: 1;
 }
 
 .thumbnail-loading {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
     color: rgba(255, 255, 255, 0.5);
     font-size: 0.75rem;
+}
+
+/* Playhead - 再生位置インジケーター */
+.playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent-primary);
+    box-shadow: 0 0 8px var(--accent-primary);
+    z-index: 10;
+    pointer-events: none;
+    left: 0%;
+}
+
+.playhead::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid var(--accent-primary);
+}
+
+.playhead::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 6px solid var(--accent-primary);
 }
 
 /* Seekbar */
@@ -615,6 +663,7 @@ body::before {
     justify-content: space-between;
     align-items: center;
     padding-top: var(--spacing-xs);
+    gap: var(--spacing-sm);
 }
 
 .timeline-time {
@@ -625,6 +674,46 @@ body::before {
 
 .timeline-time-current {
     color: white;
+}
+
+/* Precision/Zoom Control */
+.precision-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    justify-content: center;
+}
+
+.precision-label {
+    font-size: 0.625rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.precision-slider {
+    width: 80px;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.precision-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.precision-value {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    color: rgba(255, 255, 255, 0.7);
+    min-width: 50px;
 }
 
 .cache-status {

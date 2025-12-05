@@ -1,6 +1,6 @@
 /**
  * RyounoMe - Player Module
- * Advanced video player with thumbnail strip and caching
+ * Advanced video player with playhead indicator and precision control
  */
 
 class VideoPlayer {
@@ -13,6 +13,7 @@ class VideoPlayer {
         this.frameRate = options.frameRate || 30;
         this.startTime = 0;
         this.isSeeking = false;
+        this.precision = 50; // 1-100, affects seek step
         
         // Callbacks
         this.onTimeUpdate = options.onTimeUpdate || (() => {});
@@ -21,16 +22,13 @@ class VideoPlayer {
         
         // Throttle
         this.lastTimeUpdate = 0;
-        this.timeUpdateThrottle = 33; // ~30fps UI update
+        this.timeUpdateThrottle = 33;
         
         // Thumbnail generation
         this.thumbnails = [];
-        this.thumbnailCount = 20;
+        this.thumbnailCount = 30;
         this.isGeneratingThumbnails = false;
         this.thumbnailWorkerVideo = null;
-        
-        // Cache status
-        this.cacheReady = false;
         
         // YouTube container ID
         this.youtubeContainerId = `player${this.key}Youtube`;
@@ -65,10 +63,11 @@ class VideoPlayer {
             nameInput: document.getElementById(`${p}Name`),
             startTimeInput: document.getElementById(`${p}StartTime`),
             setStartBtn: document.getElementById(`${p}SetStart`),
-            // Timeline elements
+            // Timeline
             timeline: document.getElementById(`${p}Timeline`),
             thumbnailStrip: document.getElementById(`${p}ThumbnailStrip`),
             thumbnailsContainer: document.getElementById(`${p}Thumbnails`),
+            playhead: document.getElementById(`${p}Playhead`),
             seekWrapper: document.getElementById(`${p}SeekWrapper`),
             seekPreview: document.getElementById(`${p}SeekPreview`),
             previewCanvas: document.getElementById(`${p}PreviewCanvas`),
@@ -78,10 +77,10 @@ class VideoPlayer {
             seekThumb: document.getElementById(`${p}Thumb`),
             currentTimeDisplay: document.getElementById(`${p}CurrentTime`),
             durationDisplay: document.getElementById(`${p}Duration`),
-            cacheStatus: document.getElementById(`${p}CacheStatus`)
+            precisionSlider: document.getElementById(`${p}Precision`),
+            precisionValue: document.getElementById(`${p}PrecisionValue`)
         };
         
-        // Preview canvas context
         if (this.elements.previewCanvas) {
             this.previewCtx = this.elements.previewCanvas.getContext('2d');
         }
@@ -96,9 +95,7 @@ class VideoPlayer {
 
         // File input
         this.elements.fileInput?.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                this.loadLocalFile(e.target.files[0]);
-            }
+            if (e.target.files.length > 0) this.loadLocalFile(e.target.files[0]);
         });
 
         // Drag & Drop
@@ -134,7 +131,14 @@ class VideoPlayer {
             this.setPlaybackRate(parseFloat(e.target.value));
         });
 
-        // Seekbar
+        // Precision slider
+        this.elements.precisionSlider?.addEventListener('input', (e) => {
+            this.precision = parseInt(e.target.value);
+            this.updatePrecisionDisplay();
+        });
+        this.updatePrecisionDisplay();
+
+        // Seekbar & Thumbnail strip
         this.setupSeekbar();
 
         // Start position
@@ -144,9 +148,7 @@ class VideoPlayer {
         });
 
         // Name
-        this.elements.nameInput?.addEventListener('change', (e) => {
-            this.saveName(e.target.value);
-        });
+        this.elements.nameInput?.addEventListener('change', (e) => this.saveName(e.target.value));
 
         // Video events
         const video = this.elements.video;
@@ -157,15 +159,34 @@ class VideoPlayer {
             video.addEventListener('ended', () => this.handleStateChange('ended'));
             video.addEventListener('loadedmetadata', () => this.handleVideoLoaded());
             video.addEventListener('progress', () => this.updateBuffer());
-            video.addEventListener('canplaythrough', () => this.updateCacheStatus(true));
         }
         
         // Click to play/pause
         this.elements.screen?.addEventListener('click', (e) => {
-            if (!e.target.closest('.timeline-container')) {
-                this.togglePlayPause();
-            }
+            if (!e.target.closest('.timeline-container')) this.togglePlayPause();
         });
+    }
+
+    updatePrecisionDisplay() {
+        if (!this.elements.precisionValue) return;
+        
+        let label;
+        if (this.precision <= 10) label = '1分';
+        else if (this.precision <= 25) label = '10秒';
+        else if (this.precision <= 50) label = '1秒';
+        else if (this.precision <= 75) label = '100ms';
+        else label = 'フレーム';
+        
+        this.elements.precisionValue.textContent = label;
+    }
+
+    getSeekStep() {
+        // Based on precision, return step in percentage
+        if (this.precision <= 10) return 1; // 1%
+        if (this.precision <= 25) return 0.1;
+        if (this.precision <= 50) return 0.01;
+        if (this.precision <= 75) return 0.001;
+        return 0.0001; // Frame level
     }
 
     setupDragDrop() {
@@ -190,9 +211,7 @@ class VideoPlayer {
             el.addEventListener('dragleave', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (!el.contains(e.relatedTarget)) {
-                    dropzone?.classList.remove('active');
-                }
+                if (!el.contains(e.relatedTarget)) dropzone?.classList.remove('active');
             });
 
             el.addEventListener('drop', (e) => {
@@ -212,43 +231,51 @@ class VideoPlayer {
 
     setupSeekbar() {
         const wrapper = this.elements.seekWrapper;
+        const strip = this.elements.thumbnailStrip;
         if (!wrapper) return;
         
         let isDragging = false;
         
-        const getPercent = (e) => {
-            const rect = wrapper.getBoundingClientRect();
+        const getPercent = (e, el) => {
+            const rect = el.getBoundingClientRect();
             return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         };
 
+        const handleSeek = (e, el) => {
+            if (!this.isReady) return;
+            const percent = getPercent(e, el);
+            const time = percent * this.getDuration();
+            this.seekTo(time);
+            this.updatePlayhead(percent);
+            this.updateSeekbarUI(percent);
+        };
+
+        // Seekbar events
         wrapper.addEventListener('mousemove', (e) => {
             if (!this.isReady) return;
-            const percent = getPercent(e);
+            const percent = getPercent(e, wrapper);
             const time = percent * this.getDuration();
             this.updatePreview(percent, time);
-            
-            if (isDragging) {
-                this.seekTo(time);
-                this.updateSeekbarUI(percent);
-            }
+            if (isDragging) handleSeek(e, wrapper);
         });
         
         wrapper.addEventListener('mousedown', (e) => {
             if (!this.isReady) return;
             e.preventDefault();
             e.stopPropagation();
-            
             isDragging = true;
             this.isSeeking = true;
             this.elements.seekPreview?.classList.add('active');
-            
-            const percent = getPercent(e);
-            const time = percent * this.getDuration();
-            this.seekTo(time);
-            this.updateSeekbarUI(percent);
-            this.updatePreview(percent, time);
+            handleSeek(e, wrapper);
         });
-        
+
+        // Thumbnail strip click
+        strip?.addEventListener('click', (e) => {
+            if (!this.isReady) return;
+            handleSeek(e, strip);
+        });
+
+        // Global mouse events for dragging
         document.addEventListener('mouseup', () => {
             if (isDragging) {
                 isDragging = false;
@@ -259,21 +286,28 @@ class VideoPlayer {
         
         document.addEventListener('mousemove', (e) => {
             if (!isDragging || !this.isReady) return;
-            const percent = getPercent(e);
+            const percent = getPercent(e, wrapper);
             const time = percent * this.getDuration();
             this.seekTo(time);
+            this.updatePlayhead(percent);
             this.updateSeekbarUI(percent);
             this.updatePreview(percent, time);
         });
+    }
+
+    updatePlayhead(percent) {
+        if (this.elements.playhead) {
+            this.elements.playhead.style.left = `${percent * 100}%`;
+        }
         
-        // Also handle thumbnail strip clicks
-        this.elements.thumbnailStrip?.addEventListener('click', (e) => {
-            if (!this.isReady) return;
-            const rect = this.elements.thumbnailStrip.getBoundingClientRect();
-            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-            const time = percent * this.getDuration();
-            this.seekTo(time);
-        });
+        // Highlight active thumbnail
+        const thumbs = this.elements.thumbnailsContainer?.querySelectorAll('.thumbnail-item');
+        if (thumbs && thumbs.length > 0) {
+            const activeIndex = Math.floor(percent * thumbs.length);
+            thumbs.forEach((thumb, i) => {
+                thumb.classList.toggle('active', i === activeIndex);
+            });
+        }
     }
     
     updatePreview(percent, time) {
@@ -290,24 +324,16 @@ class VideoPlayer {
             this.elements.previewTime.textContent = this.formatTimeShort(time);
         }
         
-        // Draw preview thumbnail for local video
-        if (this.type === 'local' && this.previewCtx && this.elements.video) {
-            this.drawPreviewFrame(time);
+        // Draw preview for local video
+        if (this.type === 'local' && this.previewCtx && this.thumbnailWorkerVideo) {
+            const video = this.thumbnailWorkerVideo;
+            if (Math.abs(video.currentTime - time) > 0.3) {
+                video.currentTime = time;
+            }
+            try {
+                this.previewCtx.drawImage(video, 0, 0, 120, 68);
+            } catch (e) {}
         }
-    }
-    
-    drawPreviewFrame(time) {
-        // Use worker video for preview
-        if (!this.thumbnailWorkerVideo) return;
-        
-        const video = this.thumbnailWorkerVideo;
-        if (Math.abs(video.currentTime - time) > 0.5) {
-            video.currentTime = time;
-        }
-        
-        try {
-            this.previewCtx.drawImage(video, 0, 0, 120, 68);
-        } catch (e) {}
     }
     
     updateSeekbarUI(percent) {
@@ -321,29 +347,12 @@ class VideoPlayer {
     
     updateBuffer() {
         if (!this.isReady || this.type !== 'local') return;
-        
         const video = this.elements.video;
         if (video?.buffered.length > 0) {
             const buffered = video.buffered.end(video.buffered.length - 1);
             const percent = (buffered / video.duration) * 100;
             if (this.elements.seekBuffer) {
                 this.elements.seekBuffer.style.width = `${percent}%`;
-            }
-        }
-    }
-    
-    updateCacheStatus(ready) {
-        this.cacheReady = ready;
-        const status = this.elements.cacheStatus;
-        if (status) {
-            const indicator = status.querySelector('.cache-indicator');
-            const text = status.querySelector('span:last-child');
-            if (ready) {
-                indicator?.classList.add('ready');
-                if (text) text.textContent = 'キャッシュ: 完了';
-            } else {
-                indicator?.classList.remove('ready');
-                if (text) text.textContent = 'キャッシュ: 読込中';
             }
         }
     }
@@ -361,12 +370,12 @@ class VideoPlayer {
         const video = this.elements.video;
         const duration = video.duration;
         if (!duration || duration === Infinity) {
-            container.innerHTML = '<div class="thumbnail-loading">サムネイル生成不可</div>';
+            container.innerHTML = '<div class="thumbnail-loading">生成不可</div>';
             this.isGeneratingThumbnails = false;
             return;
         }
         
-        // Create worker video for thumbnail generation
+        // Create worker video
         this.thumbnailWorkerVideo = document.createElement('video');
         this.thumbnailWorkerVideo.src = video.src;
         this.thumbnailWorkerVideo.muted = true;
@@ -378,16 +387,17 @@ class VideoPlayer {
         });
         
         // Generate thumbnails
-        const count = Math.min(this.thumbnailCount, Math.ceil(duration / 5)); // 1 per 5 sec max
+        const count = Math.min(this.thumbnailCount, Math.ceil(duration / 3));
         const interval = duration / count;
-        const thumbWidth = Math.max(40, this.elements.thumbnailStrip.offsetWidth / count);
+        const stripWidth = this.elements.thumbnailStrip?.offsetWidth || 400;
+        const thumbWidth = stripWidth / count;
         
         container.innerHTML = '';
         this.thumbnails = [];
         
         const canvas = document.createElement('canvas');
-        canvas.width = thumbWidth;
-        canvas.height = 40;
+        canvas.width = Math.max(40, thumbWidth);
+        canvas.height = 48;
         const ctx = canvas.getContext('2d');
         
         for (let i = 0; i < count; i++) {
@@ -397,11 +407,11 @@ class VideoPlayer {
                 this.thumbnailWorkerVideo.currentTime = time;
                 await new Promise(resolve => {
                     this.thumbnailWorkerVideo.onseeked = resolve;
-                    setTimeout(resolve, 200); // Fallback timeout
+                    setTimeout(resolve, 150);
                 });
                 
-                ctx.drawImage(this.thumbnailWorkerVideo, 0, 0, thumbWidth, 40);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                ctx.drawImage(this.thumbnailWorkerVideo, 0, 0, canvas.width, canvas.height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                 
                 const thumbDiv = document.createElement('div');
                 thumbDiv.className = 'thumbnail-item';
@@ -411,7 +421,7 @@ class VideoPlayer {
                 
                 this.thumbnails.push({ time, dataUrl });
             } catch (e) {
-                console.warn('Thumbnail generation error:', e);
+                console.warn('Thumbnail error:', e);
             }
         }
         
@@ -470,7 +480,7 @@ class VideoPlayer {
     loadFromUrl() {
         const url = this.elements.urlInput?.value.trim();
         if (!url) {
-            Toast.show('URLを入力してください', 'warning');
+            Toast.show('URLを入力', 'warning');
             return;
         }
 
@@ -478,7 +488,7 @@ class VideoPlayer {
         if (videoId) {
             this.loadYoutubeVideo(videoId, url);
         } else {
-            Toast.show('有効なYouTube URLを入力してください', 'error');
+            Toast.show('無効なURL', 'error');
         }
     }
 
@@ -505,7 +515,6 @@ class VideoPlayer {
         this.recreateYoutubeContainer();
         this.elements.youtubeContainer.style.display = 'block';
         
-        // Hide thumbnail strip for YouTube
         if (this.elements.thumbnailsContainer) {
             this.elements.thumbnailsContainer.innerHTML = '<div class="thumbnail-loading">YouTube: サムネイル非対応</div>';
         }
@@ -539,7 +548,7 @@ class VideoPlayer {
 
     createYoutubePlayer(videoId) {
         if (this.youtubePlayer) {
-            try { this.youtubePlayer.destroy(); } catch (e) {}
+            try { this.youtubePlayer.destroy(); } catch {}
             this.youtubePlayer = null;
         }
 
@@ -555,7 +564,7 @@ class VideoPlayer {
                 disablekb: 1
             },
             events: {
-                onReady: (e) => this.handleYoutubeReady(e),
+                onReady: () => this.handleYoutubeReady(),
                 onStateChange: (e) => this.handleYoutubeStateChange(e),
                 onError: (e) => this.handleYoutubeError(e)
             }
@@ -571,8 +580,6 @@ class VideoPlayer {
             this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
         }
         
-        this.updateCacheStatus(true);
-        
         if (this.startTime > 0) this.seekTo(this.startTime);
         
         this.onReady(this);
@@ -585,7 +592,7 @@ class VideoPlayer {
     }
 
     handleYoutubeError(event) {
-        const errors = { 2: '無効なパラメータ', 100: '動画が見つかりません', 101: '埋め込み不可', 150: '埋め込み不可' };
+        const errors = { 2: '無効なパラメータ', 100: '動画なし', 101: '埋め込み不可', 150: '埋め込み不可' };
         Toast.show(`YouTube: ${errors[event.data] || 'エラー'}`, 'error');
     }
 
@@ -603,7 +610,6 @@ class VideoPlayer {
         this.elements.video.preload = 'auto';
         this.elements.video.load();
         
-        this.updateCacheStatus(false);
         Toast.show(`${file.name} 読込中...`, 'info');
     }
 
@@ -618,10 +624,10 @@ class VideoPlayer {
         if (this.startTime > 0) this.seekTo(this.startTime);
         
         // Generate thumbnail strip
-        setTimeout(() => this.generateThumbnailStrip(), 500);
+        setTimeout(() => this.generateThumbnailStrip(), 300);
         
         this.onReady(this);
-        Toast.show(`${this.elements.nameInput?.value || 'Player'}: 動画読込完了`, 'success');
+        Toast.show(`${this.elements.nameInput?.value || 'Player'}: 読込完了`, 'success');
     }
 
     handleTimeUpdate() {
@@ -636,7 +642,9 @@ class VideoPlayer {
         }
         
         if (duration > 0 && !this.isSeeking) {
-            this.updateSeekbarUI(time / duration);
+            const percent = time / duration;
+            this.updateSeekbarUI(percent);
+            this.updatePlayhead(percent);
         }
         
         this.updateVolumeIcon();
@@ -784,12 +792,12 @@ class VideoPlayer {
         if (this.elements.seekProgress) this.elements.seekProgress.style.width = '0%';
         if (this.elements.seekBuffer) this.elements.seekBuffer.style.width = '0%';
         if (this.elements.seekThumb) this.elements.seekThumb.style.left = '0%';
+        if (this.elements.playhead) this.elements.playhead.style.left = '0%';
         if (this.elements.currentTimeDisplay) this.elements.currentTimeDisplay.textContent = '0:00';
         if (this.elements.durationDisplay) this.elements.durationDisplay.textContent = '0:00';
         
         this.thumbnails = [];
         this.isGeneratingThumbnails = false;
-        this.cacheReady = false;
         this.isReady = false;
         this.type = null;
         this.videoUrl = null;

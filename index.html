@@ -52,11 +52,12 @@
                     
                     <!-- Advanced Timeline -->
                     <div class="timeline-container" id="playerATimeline">
-                        <!-- Thumbnail Strip -->
+                        <!-- Thumbnail Strip with Playhead -->
                         <div class="thumbnail-strip" id="playerAThumbnailStrip">
                             <div class="thumbnail-strip-inner" id="playerAThumbnails">
-                                <div class="thumbnail-loading">サムネイル生成中...</div>
+                                <div class="thumbnail-loading">動画を読み込んでください</div>
                             </div>
+                            <div class="playhead" id="playerAPlayhead"></div>
                         </div>
                         <!-- Seekbar -->
                         <div class="seekbar-wrapper" id="playerASeekWrapper">
@@ -75,9 +76,10 @@
                         <!-- Info -->
                         <div class="timeline-info">
                             <span class="timeline-time timeline-time-current" id="playerACurrentTime">0:00</span>
-                            <div class="cache-status" id="playerACacheStatus">
-                                <span class="cache-indicator"></span>
-                                <span>キャッシュ: 待機中</span>
+                            <div class="precision-control">
+                                <span class="precision-label">精度:</span>
+                                <input type="range" class="precision-slider" id="playerAPrecision" min="1" max="100" value="50">
+                                <span class="precision-value" id="playerAPrecisionValue">1秒</span>
                             </div>
                             <span class="timeline-time" id="playerADuration">0:00</span>
                         </div>
@@ -152,8 +154,9 @@
                     <div class="timeline-container" id="playerBTimeline">
                         <div class="thumbnail-strip" id="playerBThumbnailStrip">
                             <div class="thumbnail-strip-inner" id="playerBThumbnails">
-                                <div class="thumbnail-loading">サムネイル生成中...</div>
+                                <div class="thumbnail-loading">動画を読み込んでください</div>
                             </div>
+                            <div class="playhead" id="playerBPlayhead"></div>
                         </div>
                         <div class="seekbar-wrapper" id="playerBSeekWrapper">
                             <div class="seekbar-preview" id="playerBSeekPreview">
@@ -170,9 +173,10 @@
                         </div>
                         <div class="timeline-info">
                             <span class="timeline-time timeline-time-current" id="playerBCurrentTime">0:00</span>
-                            <div class="cache-status" id="playerBCacheStatus">
-                                <span class="cache-indicator"></span>
-                                <span>キャッシュ: 待機中</span>
+                            <div class="precision-control">
+                                <span class="precision-label">精度:</span>
+                                <input type="range" class="precision-slider" id="playerBPrecision" min="1" max="100" value="50">
+                                <span class="precision-value" id="playerBPrecisionValue">1秒</span>
                             </div>
                             <span class="timeline-time" id="playerBDuration">0:00</span>
                         </div>
