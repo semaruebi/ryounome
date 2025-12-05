@@ -390,6 +390,9 @@ body::before {
     border-radius: var(--radius-sm);
 }
 
+/* ========================================
+   Player Screen with Overlay Seekbar
+   ======================================== */
 .player-wrapper {
     position: relative;
 }
@@ -400,6 +403,7 @@ body::before {
     padding-top: 56.25%;
     background: #000;
     border-radius: 0;
+    overflow: hidden;
 }
 
 .player-placeholder {
@@ -457,6 +461,142 @@ body::before {
     display: flex;
 }
 
+/* ========================================
+   Video Overlay Controls (Netflix/YouTube style)
+   ======================================== */
+.video-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+    padding: var(--spacing-lg) var(--spacing-md) var(--spacing-md);
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+    z-index: 5;
+}
+
+.player-screen:hover .video-overlay,
+.video-overlay:focus-within,
+.video-overlay.active {
+    opacity: 1;
+}
+
+.overlay-seekbar-container {
+    position: relative;
+    margin-bottom: var(--spacing-sm);
+}
+
+.overlay-seekbar-wrapper {
+    position: relative;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.overlay-seekbar-track {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    position: relative;
+    transition: height var(--transition-fast);
+}
+
+.overlay-seekbar-wrapper:hover .overlay-seekbar-track {
+    height: 6px;
+}
+
+.overlay-seekbar-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--accent-primary);
+    border-radius: 2px;
+    pointer-events: none;
+}
+
+.overlay-seekbar-thumb {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform var(--transition-fast);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.overlay-seekbar-wrapper:hover .overlay-seekbar-thumb {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+/* Thumbnail Preview */
+.thumbnail-preview {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    transform: translateX(-50%);
+    margin-bottom: 12px;
+    background: #000;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+    z-index: 10;
+}
+
+.overlay-seekbar-wrapper:hover .thumbnail-preview {
+    opacity: 1;
+}
+
+.thumbnail-canvas {
+    display: block;
+    width: 160px;
+    height: 90px;
+    background: #1a1a1a;
+}
+
+.thumbnail-time {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 4px;
+}
+
+/* Overlay Time Display */
+.overlay-time {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+
+.overlay-time-current {
+    color: white;
+}
+
+.overlay-time-duration {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* ========================================
+   Player Controls (Below video)
+   ======================================== */
 .player-controls {
     padding: var(--spacing-md);
     display: flex;
@@ -591,89 +731,17 @@ body::before {
     cursor: pointer;
 }
 
-/* ========================================
-   Enhanced Seekbar
-   ======================================== */
-.seekbar-container {
-    position: relative;
-    padding: var(--spacing-sm) 0;
-}
-
-.seekbar-wrapper {
-    position: relative;
-    height: 32px;
-    display: flex;
-    align-items: center;
-}
-
-.seekbar {
-    width: 100%;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 6px;
-    background: var(--border-color);
-    border-radius: 3px;
-    cursor: pointer;
-    transition: height var(--transition-fast);
-}
-
-.seekbar:hover {
-    height: 8px;
-}
-
-.seekbar::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    background: var(--accent-primary);
-    border-radius: 50%;
-    cursor: pointer;
-    box-shadow: var(--shadow-md);
-    transition: transform var(--transition-fast);
-}
-
-.seekbar::-webkit-slider-thumb:hover {
-    transform: scale(1.3);
-}
-
-.seekbar-preview {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-primary);
-    pointer-events: none;
-    opacity: 0;
-    transform: translateX(-50%) translateY(-4px);
-    transition: opacity var(--transition-fast);
-    white-space: nowrap;
-    box-shadow: var(--shadow-md);
-}
-
-.seekbar-wrapper:hover .seekbar-preview {
-    opacity: 1;
-}
-
+/* Zoom Control */
 .seekbar-zoom {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    margin-top: var(--spacing-xs);
-    justify-content: flex-end;
-}
-
-.seekbar-zoom label {
     font-size: 0.75rem;
     color: var(--text-tertiary);
 }
 
 .zoom-slider {
-    width: 100px;
+    width: 80px;
     -webkit-appearance: none;
     appearance: none;
     height: 3px;
@@ -695,7 +763,7 @@ body::before {
     font-size: 0.75rem;
     color: var(--text-tertiary);
     font-family: var(--font-mono);
-    min-width: 60px;
+    min-width: 70px;
 }
 
 /* ========================================

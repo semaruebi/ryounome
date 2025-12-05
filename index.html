@@ -59,6 +59,27 @@
                             </div>
                             <video id="playerAVideo" class="video-element" style="display: none;"></video>
                             <div id="playerAYoutube" class="youtube-player" style="display: none;"></div>
+                            
+                            <!-- Video Overlay with Seekbar -->
+                            <div class="video-overlay" id="playerAOverlay">
+                                <div class="overlay-seekbar-container">
+                                    <!-- Thumbnail Preview -->
+                                    <div class="thumbnail-preview" id="playerAThumbnail">
+                                        <canvas class="thumbnail-canvas" id="playerAThumbnailCanvas" width="160" height="90"></canvas>
+                                        <div class="thumbnail-time" id="playerAThumbnailTime">0:00</div>
+                                    </div>
+                                    <div class="overlay-seekbar-wrapper" id="playerASeekWrapper">
+                                        <div class="overlay-seekbar-track">
+                                            <div class="overlay-seekbar-progress" id="playerAProgress"></div>
+                                        </div>
+                                        <div class="overlay-seekbar-thumb" id="playerAThumb"></div>
+                                    </div>
+                                </div>
+                                <div class="overlay-time">
+                                    <span class="overlay-time-current" id="playerACurrentTime">0:00</span>
+                                    <span class="overlay-time-duration" id="playerADuration">/ 0:00</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="player-dropzone" id="playerADropzone">
                             <p>ここにドラッグ＆ドロップ</p>
@@ -80,6 +101,11 @@
                                 <label>開始位置:</label>
                                 <input type="text" id="playerAStartTime" class="start-position-input" value="0:00" placeholder="0:00">
                                 <button class="btn btn-small btn-ghost" id="playerASetStart" title="開始位置を設定">📍</button>
+                            </div>
+                            <div class="seekbar-zoom">
+                                <label>精度:</label>
+                                <input type="range" id="playerAZoom" class="zoom-slider" min="1" max="100" value="1">
+                                <span class="zoom-indicator" id="playerAZoomIndicator">1分単位</span>
                             </div>
                         </div>
                         <div class="control-row playback-controls">
@@ -109,17 +135,6 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="seekbar-container">
-                            <div class="seekbar-wrapper" id="playerASeekWrapper">
-                                <span class="seekbar-preview" id="playerASeekPreview">00:00:00</span>
-                                <input type="range" id="playerASeek" class="seekbar" min="0" max="100" value="0" step="0.001">
-                            </div>
-                            <div class="seekbar-zoom">
-                                <label>精度:</label>
-                                <input type="range" id="playerAZoom" class="zoom-slider" min="1" max="100" value="1">
-                                <span class="zoom-indicator" id="playerAZoomIndicator">1分単位</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -140,6 +155,27 @@
                             </div>
                             <video id="playerBVideo" class="video-element" style="display: none;"></video>
                             <div id="playerBYoutube" class="youtube-player" style="display: none;"></div>
+                            
+                            <!-- Video Overlay with Seekbar -->
+                            <div class="video-overlay" id="playerBOverlay">
+                                <div class="overlay-seekbar-container">
+                                    <!-- Thumbnail Preview -->
+                                    <div class="thumbnail-preview" id="playerBThumbnail">
+                                        <canvas class="thumbnail-canvas" id="playerBThumbnailCanvas" width="160" height="90"></canvas>
+                                        <div class="thumbnail-time" id="playerBThumbnailTime">0:00</div>
+                                    </div>
+                                    <div class="overlay-seekbar-wrapper" id="playerBSeekWrapper">
+                                        <div class="overlay-seekbar-track">
+                                            <div class="overlay-seekbar-progress" id="playerBProgress"></div>
+                                        </div>
+                                        <div class="overlay-seekbar-thumb" id="playerBThumb"></div>
+                                    </div>
+                                </div>
+                                <div class="overlay-time">
+                                    <span class="overlay-time-current" id="playerBCurrentTime">0:00</span>
+                                    <span class="overlay-time-duration" id="playerBDuration">/ 0:00</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="player-dropzone" id="playerBDropzone">
                             <p>ここにドラッグ＆ドロップ</p>
@@ -161,6 +197,11 @@
                                 <label>開始位置:</label>
                                 <input type="text" id="playerBStartTime" class="start-position-input" value="0:00" placeholder="0:00">
                                 <button class="btn btn-small btn-ghost" id="playerBSetStart" title="開始位置を設定">📍</button>
+                            </div>
+                            <div class="seekbar-zoom">
+                                <label>精度:</label>
+                                <input type="range" id="playerBZoom" class="zoom-slider" min="1" max="100" value="1">
+                                <span class="zoom-indicator" id="playerBZoomIndicator">1分単位</span>
                             </div>
                         </div>
                         <div class="control-row playback-controls">
@@ -188,17 +229,6 @@
                                     <option value="1.5">1.5x</option>
                                     <option value="2">2x</option>
                                 </select>
-                            </div>
-                        </div>
-                        <div class="seekbar-container">
-                            <div class="seekbar-wrapper" id="playerBSeekWrapper">
-                                <span class="seekbar-preview" id="playerBSeekPreview">00:00:00</span>
-                                <input type="range" id="playerBSeek" class="seekbar" min="0" max="100" value="0" step="0.001">
-                            </div>
-                            <div class="seekbar-zoom">
-                                <label>精度:</label>
-                                <input type="range" id="playerBZoom" class="zoom-slider" min="1" max="100" value="1">
-                                <span class="zoom-indicator" id="playerBZoomIndicator">1分単位</span>
                             </div>
                         </div>
                     </div>
@@ -328,14 +358,15 @@
                     <tr><td><kbd>Space</kbd></td><td>再生/一時停止</td></tr>
                     <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>1フレーム移動</td></tr>
                     <tr><td><kbd>S</kbd></td><td>同期 ON/OFF</td></tr>
+                    <tr><td><kbd>R</kbd></td><td>開始位置に戻る</td></tr>
                     <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>コメント投稿</td></tr>
                 </table>
 
                 <h3>🔗 同期機能</h3>
                 <p>ONにするとプレイヤーAの操作にBが追従。<br>オフセットで時間差を調整できます。</p>
 
-                <h3>📐 シークバーの精度</h3>
-                <p>「精度」スライダーで1分単位〜ミリ秒単位まで調整可能。</p>
+                <h3>📐 シークバー</h3>
+                <p>動画上のシークバーをドラッグするとサムネイルプレビューが表示されます。精度スライダーで細かさを調整できます。</p>
             </div>
         </div>
     </div>
