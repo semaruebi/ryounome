@@ -1,38 +1,18 @@
 /**
  * RyounoMe - Main Application
- * アプリケーションのエントリーポイント
- * Performance optimized version
  */
 
-// Toast通知ユーティリティ
 const Toast = {
     container: null,
-    queue: [],
-    isProcessing: false,
-
     init() {
         this.container = document.getElementById('toastContainer');
     },
-
-    show(message, type = 'info', duration = 2500) {
+    show(message, type = 'info', duration = 2000) {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        
-        const icons = {
-            success: '✓',
-            error: '✕',
-            warning: '⚠',
-            info: 'ℹ'
-        };
-
-        toast.innerHTML = `
-            <span class="toast-icon">${icons[type] || icons.info}</span>
-            <span class="toast-message">${message}</span>
-        `;
-
+        const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+        toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span>${message}</span>`;
         this.container.appendChild(toast);
-
-        // 自動削除
         setTimeout(() => {
             toast.classList.add('fade-out');
             setTimeout(() => toast.remove(), 300);
@@ -40,10 +20,8 @@ const Toast = {
     }
 };
 
-// グローバルに公開
 window.Toast = Toast;
 
-// メインアプリケーション
 class App {
     constructor() {
         this.playerA = null;
@@ -52,9 +30,8 @@ class App {
         this.commentsController = null;
         this.sidebarOpen = true;
         
-        // YouTube API Ready callback
         window.onYouTubeIframeAPIReady = () => {
-            console.log('YouTube IFrame API Ready');
+            console.log('YouTube API Ready');
         };
     }
 
@@ -66,20 +43,18 @@ class App {
         this.initUI();
         this.initSidebar();
         this.bindKeyboardShortcuts();
-
+        
         console.log('RyounoMe initialized');
-        Toast.show('RyounoMe へようこそ！', 'success');
+        Toast.show('RyounoMe 起動', 'success');
     }
 
     initPlayers() {
-        // プレイヤーAの初期化
         this.playerA = new VideoPlayer('A', {
             onTimeUpdate: (time, player) => this.handleTimeUpdate(time, player),
             onStateChange: (state, player) => this.handleStateChange(state, player),
             onReady: (player) => this.handlePlayerReady(player)
         });
 
-        // プレイヤーBの初期化
         this.playerB = new VideoPlayer('B', {
             onTimeUpdate: (time, player) => this.handleTimeUpdate(time, player),
             onStateChange: (state, player) => this.handleStateChange(state, player),
@@ -89,106 +64,70 @@ class App {
 
     initSync() {
         this.syncController = new SyncController(this.playerA, this.playerB, {
-            onSyncStateChange: (enabled) => {
-                console.log('Sync state:', enabled);
-            }
+            onSyncStateChange: (enabled) => console.log('Sync:', enabled)
         });
     }
 
     initComments() {
         this.commentsController = new CommentsController({
             onCommentClick: (comment) => this.handleCommentClick(comment),
-            getPlayerTime: (playerKey) => this.getPlayerTime(playerKey)
+            getPlayerTime: (key) => this.getPlayerTime(key)
         });
     }
 
     initUI() {
-        // ヘルプモーダル
-        const helpBtn = document.getElementById('helpBtn');
+        // Help modal
         const helpModal = document.getElementById('helpModal');
-        const closeHelpModal = document.getElementById('closeHelpModal');
-        const modalBackdrop = helpModal.querySelector('.modal-backdrop');
+        document.getElementById('helpBtn')?.addEventListener('click', () => helpModal.classList.add('active'));
+        document.getElementById('closeHelpModal')?.addEventListener('click', () => helpModal.classList.remove('active'));
+        helpModal?.querySelector('.modal-backdrop')?.addEventListener('click', () => helpModal.classList.remove('active'));
 
-        helpBtn.addEventListener('click', () => {
-            helpModal.classList.add('active');
-        });
-
-        closeHelpModal.addEventListener('click', () => {
-            helpModal.classList.remove('active');
-        });
-
-        modalBackdrop.addEventListener('click', () => {
-            helpModal.classList.remove('active');
-        });
-
-        // ESCでモーダルを閉じる
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && helpModal.classList.contains('active')) {
-                helpModal.classList.remove('active');
-            }
+            if (e.key === 'Escape') helpModal?.classList.remove('active');
         });
 
-        // エクスポート
-        document.getElementById('exportBtn').addEventListener('click', () => {
-            if (Storage.exportData()) {
-                Toast.show('データをエクスポートしました', 'success');
-            } else {
-                Toast.show('エクスポートに失敗しました', 'error');
-            }
+        // Export
+        document.getElementById('exportBtn')?.addEventListener('click', () => {
+            Storage.exportData() ? Toast.show('エクスポート完了', 'success') : Toast.show('エクスポート失敗', 'error');
         });
 
-        // インポート
-        const importBtn = document.getElementById('importBtn');
-        const importFileInput = document.getElementById('importFileInput');
-
-        importBtn.addEventListener('click', () => {
-            importFileInput.click();
-        });
-
-        importFileInput.addEventListener('change', async (e) => {
+        // Import
+        const importInput = document.getElementById('importFileInput');
+        document.getElementById('importBtn')?.addEventListener('click', () => importInput?.click());
+        
+        importInput?.addEventListener('change', async (e) => {
             if (e.target.files.length === 0) return;
-
-            const file = e.target.files[0];
-            const mode = confirm('既存のデータとマージしますか？\n（キャンセルで上書き）') ? 'merge' : 'overwrite';
-
+            const mode = confirm('マージしますか？（キャンセルで上書き）') ? 'merge' : 'overwrite';
             try {
-                const result = await Storage.importData(file, mode);
-                Toast.show(`${result.imported}件のコメントをインポートしました`, 'success');
+                const result = await Storage.importData(e.target.files[0], mode);
+                Toast.show(`${result.imported}件インポート`, 'success');
                 this.commentsController.loadComments();
-            } catch (error) {
-                Toast.show(`インポートエラー: ${error.message}`, 'error');
+            } catch (err) {
+                Toast.show(`インポートエラー`, 'error');
             }
-
             e.target.value = '';
         });
     }
 
     initSidebar() {
         const sidebar = document.getElementById('commentsSidebar');
-        const toggleBtn = document.getElementById('sidebarToggleBtn');
-        const mobileToggle = document.getElementById('mobileSidebarToggle');
-
-        // サイドバートグル
-        const toggleSidebar = () => {
+        const toggle = () => {
             this.sidebarOpen = !this.sidebarOpen;
-            sidebar.classList.toggle('open', this.sidebarOpen);
-            sidebar.classList.toggle('collapsed', !this.sidebarOpen);
+            sidebar?.classList.toggle('open', this.sidebarOpen);
+            sidebar?.classList.toggle('collapsed', !this.sidebarOpen);
         };
 
-        toggleBtn.addEventListener('click', toggleSidebar);
-        mobileToggle.addEventListener('click', toggleSidebar);
+        document.getElementById('sidebarToggleBtn')?.addEventListener('click', toggle);
+        document.getElementById('mobileSidebarToggle')?.addEventListener('click', toggle);
 
-        // 初期状態（PCではデフォルトで開く、モバイルでは閉じる）
         if (window.innerWidth <= 1200) {
             this.sidebarOpen = false;
-            sidebar.classList.add('collapsed');
+            sidebar?.classList.add('collapsed');
         }
 
-        // リサイズ時の処理
         window.addEventListener('resize', () => {
             if (window.innerWidth > 1200) {
-                sidebar.classList.remove('collapsed');
-                sidebar.classList.remove('open');
+                sidebar?.classList.remove('collapsed', 'open');
                 this.sidebarOpen = true;
             }
         });
@@ -196,11 +135,10 @@ class App {
 
     bindKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
-            // 入力フォーカス中は無視
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-                return;
-            }
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
 
+            const shift = e.shiftKey;
+            
             switch (e.code) {
                 case 'Space':
                     e.preventDefault();
@@ -208,17 +146,13 @@ class App {
                     break;
                 case 'ArrowLeft':
                     e.preventDefault();
-                    this.playerA.frameStep(-1);
-                    if (this.syncController.enabled) {
-                        this.playerB.frameStep(-1);
-                    }
+                    this.playerA.frameStep(shift ? -10 : -1);
+                    if (this.syncController.enabled) this.playerB.frameStep(shift ? -10 : -1);
                     break;
                 case 'ArrowRight':
                     e.preventDefault();
-                    this.playerA.frameStep(1);
-                    if (this.syncController.enabled) {
-                        this.playerB.frameStep(1);
-                    }
+                    this.playerA.frameStep(shift ? 10 : 1);
+                    if (this.syncController.enabled) this.playerB.frameStep(shift ? 10 : 1);
                     break;
                 case 'KeyS':
                     if (!e.ctrlKey && !e.metaKey) {
@@ -229,11 +163,8 @@ class App {
                 case 'KeyR':
                     if (!e.ctrlKey && !e.metaKey) {
                         e.preventDefault();
-                        // 両プレイヤーを開始位置に戻す
                         this.playerA.goToStart();
-                        if (this.syncController.enabled) {
-                            this.playerB.goToStart();
-                        }
+                        if (this.syncController.enabled) this.playerB.goToStart();
                     }
                     break;
             }
@@ -241,69 +172,53 @@ class App {
     }
 
     handleTimeUpdate(time, player) {
-        // プレイヤーAの場合、同期処理
         if (player.key === 'A') {
             this.syncController.syncFromA();
             
-            // コメントのタイムスタンプ更新
-            const selectedPlayer = document.querySelector('input[name="commentPlayer"]:checked').value;
-            if (selectedPlayer === 'A') {
-                this.commentsController.setCurrentTimestamp(time);
-            }
-            
-            // コメントハイライト更新
+            const selected = document.querySelector('input[name="commentPlayer"]:checked')?.value;
+            if (selected === 'A') this.commentsController.setCurrentTimestamp(time);
             this.commentsController.highlightActiveComments(time, 'A');
         } else if (player.key === 'B') {
-            const selectedPlayer = document.querySelector('input[name="commentPlayer"]:checked').value;
-            if (selectedPlayer === 'B') {
-                this.commentsController.setCurrentTimestamp(time);
-            }
+            const selected = document.querySelector('input[name="commentPlayer"]:checked')?.value;
+            if (selected === 'B') this.commentsController.setCurrentTimestamp(time);
         }
     }
 
     handleStateChange(state, player) {
-        // プレイヤーAの状態変更時に同期
-        if (player.key === 'A') {
-            this.syncController.syncPlayState(state);
-        }
+        if (player.key === 'A') this.syncController.syncPlayState(state);
     }
 
     handlePlayerReady(player) {
-        console.log(`Player ${player.key} is ready`);
+        console.log(`Player ${player.key} ready`);
     }
 
     handleCommentClick(comment) {
         const player = comment.playerKey === 'A' ? this.playerA : this.playerB;
         player.seekTo(comment.timestamp);
         
-        // 同期が有効な場合、もう一方のプレイヤーも同期
         if (this.syncController.enabled && comment.playerKey === 'A') {
             this.syncController.handleSeek(comment.timestamp);
         }
         
-        Toast.show(`${this.formatTime(comment.timestamp)} にジャンプ`, 'success');
+        Toast.show(`${this.formatTime(comment.timestamp)} へジャンプ`, 'success');
     }
 
-    getPlayerTime(playerKey) {
-        const player = playerKey === 'A' ? this.playerA : this.playerB;
-        return player ? player.getCurrentTime() : 0;
+    getPlayerTime(key) {
+        return key === 'A' ? this.playerA?.getCurrentTime() : this.playerB?.getCurrentTime();
     }
 
-    formatTime(seconds) {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-        const ms = Math.floor((seconds % 1) * 1000);
-
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+    formatTime(s) {
+        if (isNaN(s)) s = 0;
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = Math.floor(s % 60);
+        const ms = Math.floor((s % 1) * 1000);
+        return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}.${ms.toString().padStart(3,'0')}`;
     }
 }
 
-// DOM読み込み完了後に初期化
 document.addEventListener('DOMContentLoaded', () => {
     const app = new App();
     app.init();
-    
-    // グローバルに公開（デバッグ用）
     window.app = app;
 });

@@ -1,20 +1,17 @@
 /**
  * RyounoMe - Player Module
- * 動画プレイヤーの管理（YouTube / ローカルファイル対応）
- * With overlay seekbar and thumbnail preview
+ * Advanced video player with thumbnail strip and caching
  */
 
 class VideoPlayer {
     constructor(key, options = {}) {
-        this.key = key; // 'A' or 'B'
-        this.type = null; // 'youtube' or 'local'
-        this.videoElement = null;
+        this.key = key;
+        this.type = null;
         this.youtubePlayer = null;
         this.videoUrl = null;
         this.isReady = false;
         this.frameRate = options.frameRate || 30;
         this.startTime = 0;
-        this.zoomLevel = 1;
         this.isSeeking = false;
         
         // Callbacks
@@ -22,13 +19,18 @@ class VideoPlayer {
         this.onStateChange = options.onStateChange || (() => {});
         this.onReady = options.onReady || (() => {});
         
-        // Performance: Throttle time updates
+        // Throttle
         this.lastTimeUpdate = 0;
-        this.timeUpdateThrottle = 50;
+        this.timeUpdateThrottle = 33; // ~30fps UI update
         
-        // Preview canvas
-        this.previewCanvas = null;
-        this.previewCtx = null;
+        // Thumbnail generation
+        this.thumbnails = [];
+        this.thumbnailCount = 20;
+        this.isGeneratingThumbnails = false;
+        this.thumbnailWorkerVideo = null;
+        
+        // Cache status
+        this.cacheReady = false;
         
         // YouTube container ID
         this.youtubeContainerId = `player${this.key}Youtube`;
@@ -39,129 +41,128 @@ class VideoPlayer {
     }
 
     initElements() {
-        const prefix = `player${this.key}`;
+        const p = `player${this.key}`;
         
         this.elements = {
-            container: document.getElementById(`${prefix}Container`),
-            screen: document.getElementById(`${prefix}Screen`),
-            placeholder: document.getElementById(`${prefix}Placeholder`),
-            video: document.getElementById(`${prefix}Video`),
-            youtubeContainer: document.getElementById(`${prefix}Youtube`),
-            dropzone: document.getElementById(`${prefix}Dropzone`),
-            urlInput: document.getElementById(`${prefix}Url`),
-            loadBtn: document.getElementById(`${prefix}LoadBtn`),
-            fileInput: document.getElementById(`${prefix}File`),
-            playPauseBtn: document.getElementById(`${prefix}PlayPause`),
-            frameBackBtn: document.getElementById(`${prefix}FrameBack`),
-            frameForwardBtn: document.getElementById(`${prefix}FrameForward`),
-            volumeSlider: document.getElementById(`${prefix}Volume`),
-            volumeIcon: document.getElementById(`${prefix}VolumeIcon`),
-            speedSelect: document.getElementById(`${prefix}Speed`),
-            timeDisplay: document.getElementById(`${prefix}Time`),
-            nameInput: document.getElementById(`${prefix}Name`),
-            startTimeInput: document.getElementById(`${prefix}StartTime`),
-            setStartBtn: document.getElementById(`${prefix}SetStart`),
-            zoomSlider: document.getElementById(`${prefix}Zoom`),
-            zoomIndicator: document.getElementById(`${prefix}ZoomIndicator`),
-            // Overlay seekbar elements
-            seekOverlay: document.getElementById(`${prefix}SeekOverlay`),
-            seekWrapper: document.getElementById(`${prefix}SeekWrapper`),
-            seekPreview: document.getElementById(`${prefix}SeekPreview`),
-            previewCanvas: document.getElementById(`${prefix}PreviewCanvas`),
-            previewTime: document.getElementById(`${prefix}PreviewTime`),
-            seekProgress: document.getElementById(`${prefix}Progress`),
-            seekBuffer: document.getElementById(`${prefix}Buffer`),
-            seekThumb: document.getElementById(`${prefix}Thumb`),
-            currentTimeDisplay: document.getElementById(`${prefix}CurrentTime`),
-            durationDisplay: document.getElementById(`${prefix}Duration`)
+            container: document.getElementById(`${p}Container`),
+            screen: document.getElementById(`${p}Screen`),
+            placeholder: document.getElementById(`${p}Placeholder`),
+            video: document.getElementById(`${p}Video`),
+            youtubeContainer: document.getElementById(`${p}Youtube`),
+            dropzone: document.getElementById(`${p}Dropzone`),
+            urlInput: document.getElementById(`${p}Url`),
+            loadBtn: document.getElementById(`${p}LoadBtn`),
+            fileInput: document.getElementById(`${p}File`),
+            playPauseBtn: document.getElementById(`${p}PlayPause`),
+            frameBackBtn: document.getElementById(`${p}FrameBack`),
+            frameForwardBtn: document.getElementById(`${p}FrameForward`),
+            frameBack10Btn: document.getElementById(`${p}FrameBack10`),
+            frameForward10Btn: document.getElementById(`${p}FrameForward10`),
+            volumeSlider: document.getElementById(`${p}Volume`),
+            volumeIcon: document.getElementById(`${p}VolumeIcon`),
+            speedSelect: document.getElementById(`${p}Speed`),
+            timeDisplay: document.getElementById(`${p}Time`),
+            nameInput: document.getElementById(`${p}Name`),
+            startTimeInput: document.getElementById(`${p}StartTime`),
+            setStartBtn: document.getElementById(`${p}SetStart`),
+            // Timeline elements
+            timeline: document.getElementById(`${p}Timeline`),
+            thumbnailStrip: document.getElementById(`${p}ThumbnailStrip`),
+            thumbnailsContainer: document.getElementById(`${p}Thumbnails`),
+            seekWrapper: document.getElementById(`${p}SeekWrapper`),
+            seekPreview: document.getElementById(`${p}SeekPreview`),
+            previewCanvas: document.getElementById(`${p}PreviewCanvas`),
+            previewTime: document.getElementById(`${p}PreviewTime`),
+            seekProgress: document.getElementById(`${p}Progress`),
+            seekBuffer: document.getElementById(`${p}Buffer`),
+            seekThumb: document.getElementById(`${p}Thumb`),
+            currentTimeDisplay: document.getElementById(`${p}CurrentTime`),
+            durationDisplay: document.getElementById(`${p}Duration`),
+            cacheStatus: document.getElementById(`${p}CacheStatus`)
         };
         
-        // Initialize preview canvas
-        this.previewCanvas = this.elements.previewCanvas;
-        if (this.previewCanvas) {
-            this.previewCanvas.width = 160;
-            this.previewCanvas.height = 90;
-            this.previewCtx = this.previewCanvas.getContext('2d');
+        // Preview canvas context
+        if (this.elements.previewCanvas) {
+            this.previewCtx = this.elements.previewCanvas.getContext('2d');
         }
     }
 
     bindEvents() {
-        // URL読み込み
-        this.elements.loadBtn.addEventListener('click', () => this.loadFromUrl());
-        this.elements.urlInput.addEventListener('keypress', (e) => {
+        // URL load
+        this.elements.loadBtn?.addEventListener('click', () => this.loadFromUrl());
+        this.elements.urlInput?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.loadFromUrl();
         });
 
-        // ファイル選択
-        this.elements.fileInput.addEventListener('change', (e) => {
+        // File input
+        this.elements.fileInput?.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 this.loadLocalFile(e.target.files[0]);
             }
         });
 
-        // ドラッグ&ドロップ
+        // Drag & Drop
         this.setupDragDrop();
 
-        // 再生コントロール
-        this.elements.playPauseBtn.addEventListener('click', () => this.togglePlayPause());
-        this.elements.frameBackBtn.addEventListener('click', () => this.frameStep(-1));
-        this.elements.frameForwardBtn.addEventListener('click', () => this.frameStep(1));
+        // Playback controls
+        this.elements.playPauseBtn?.addEventListener('click', () => this.togglePlayPause());
+        this.elements.frameBackBtn?.addEventListener('click', () => this.frameStep(-1));
+        this.elements.frameForwardBtn?.addEventListener('click', () => this.frameStep(1));
+        this.elements.frameBack10Btn?.addEventListener('click', () => this.frameStep(-10));
+        this.elements.frameForward10Btn?.addEventListener('click', () => this.frameStep(10));
 
-        // 音量
-        this.elements.volumeSlider.addEventListener('input', (e) => {
+        // Volume
+        this.elements.volumeSlider?.addEventListener('input', (e) => {
             this.setVolume(parseInt(e.target.value) / 100);
         });
         
-        this.elements.volumeIcon.addEventListener('click', () => {
+        this.elements.volumeIcon?.addEventListener('click', () => {
             const current = parseInt(this.elements.volumeSlider.value);
             if (current > 0) {
-                this.elements.volumeSlider.dataset.prevVolume = current;
+                this.elements.volumeSlider.dataset.prev = current;
                 this.elements.volumeSlider.value = 0;
                 this.setVolume(0);
             } else {
-                const prev = this.elements.volumeSlider.dataset.prevVolume || 100;
+                const prev = this.elements.volumeSlider.dataset.prev || 100;
                 this.elements.volumeSlider.value = prev;
                 this.setVolume(prev / 100);
             }
         });
 
-        // 再生速度
-        this.elements.speedSelect.addEventListener('change', (e) => {
+        // Speed
+        this.elements.speedSelect?.addEventListener('change', (e) => {
             this.setPlaybackRate(parseFloat(e.target.value));
         });
 
-        // オーバーレイシークバー
-        this.setupOverlaySeekbar();
+        // Seekbar
+        this.setupSeekbar();
 
-        // ズームレベル
-        this.elements.zoomSlider.addEventListener('input', (e) => {
-            this.zoomLevel = parseInt(e.target.value);
-            this.updateZoomIndicator();
-        });
-
-        // 開始位置設定
-        this.elements.setStartBtn.addEventListener('click', () => this.captureStartTime());
-        this.elements.startTimeInput.addEventListener('change', (e) => {
+        // Start position
+        this.elements.setStartBtn?.addEventListener('click', () => this.captureStartTime());
+        this.elements.startTimeInput?.addEventListener('change', (e) => {
             this.startTime = this.parseTimeInput(e.target.value);
         });
 
-        // 名前入力
-        this.elements.nameInput.addEventListener('change', (e) => {
+        // Name
+        this.elements.nameInput?.addEventListener('change', (e) => {
             this.saveName(e.target.value);
         });
 
-        // ローカルビデオのイベント
-        this.elements.video.addEventListener('timeupdate', () => this.throttledTimeUpdate());
-        this.elements.video.addEventListener('play', () => this.handleStateChange('playing'));
-        this.elements.video.addEventListener('pause', () => this.handleStateChange('paused'));
-        this.elements.video.addEventListener('ended', () => this.handleStateChange('ended'));
-        this.elements.video.addEventListener('loadedmetadata', () => this.handleVideoLoaded());
-        this.elements.video.addEventListener('progress', () => this.updateBuffer());
+        // Video events
+        const video = this.elements.video;
+        if (video) {
+            video.addEventListener('timeupdate', () => this.throttledTimeUpdate());
+            video.addEventListener('play', () => this.handleStateChange('playing'));
+            video.addEventListener('pause', () => this.handleStateChange('paused'));
+            video.addEventListener('ended', () => this.handleStateChange('ended'));
+            video.addEventListener('loadedmetadata', () => this.handleVideoLoaded());
+            video.addEventListener('progress', () => this.updateBuffer());
+            video.addEventListener('canplaythrough', () => this.updateCacheStatus(true));
+        }
         
-        // 動画クリックで再生/一時停止
-        this.elements.screen.addEventListener('click', (e) => {
-            // シークバー上のクリックは除外
-            if (!e.target.closest('.seekbar-overlay')) {
+        // Click to play/pause
+        this.elements.screen?.addEventListener('click', (e) => {
+            if (!e.target.closest('.timeline-container')) {
                 this.togglePlayPause();
             }
         });
@@ -172,83 +173,58 @@ class VideoPlayer {
         const dropzone = this.elements.dropzone;
         const container = this.elements.container;
 
-        // 画面全体でドラッグを検知
-        screen.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dropzone.classList.add('active');
-        });
-
-        screen.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-
-        screen.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // 子要素へのドラッグでは非表示にしない
-            if (e.relatedTarget && screen.contains(e.relatedTarget)) {
-                return;
-            }
-            dropzone.classList.remove('active');
-        });
-
-        screen.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dropzone.classList.remove('active');
+        [screen, container].forEach(el => {
+            if (!el) return;
             
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                const file = files[0];
-                if (file.type.startsWith('video/')) {
+            el.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone?.classList.add('active');
+            });
+
+            el.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            el.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!el.contains(e.relatedTarget)) {
+                    dropzone?.classList.remove('active');
+                }
+            });
+
+            el.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone?.classList.remove('active');
+                
+                const file = e.dataTransfer.files[0];
+                if (file?.type.startsWith('video/')) {
                     this.loadLocalFile(file);
-                } else {
+                } else if (file) {
                     Toast.show('動画ファイルをドロップしてください', 'error');
                 }
-            }
-        });
-
-        // コンテナ全体でも対応
-        container.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-        });
-
-        container.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-
-        container.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropzone.classList.remove('active');
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                const file = files[0];
-                if (file.type.startsWith('video/')) {
-                    this.loadLocalFile(file);
-                }
-            }
+            });
         });
     }
 
-    setupOverlaySeekbar() {
+    setupSeekbar() {
         const wrapper = this.elements.seekWrapper;
-        const overlay = this.elements.seekOverlay;
-        
-        if (!wrapper || !overlay) return;
+        if (!wrapper) return;
         
         let isDragging = false;
         
-        // マウス移動時のプレビュー表示
+        const getPercent = (e) => {
+            const rect = wrapper.getBoundingClientRect();
+            return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        };
+
         wrapper.addEventListener('mousemove', (e) => {
             if (!this.isReady) return;
-            
-            const rect = wrapper.getBoundingClientRect();
-            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const percent = getPercent(e);
             const time = percent * this.getDuration();
-            
             this.updatePreview(percent, time);
             
             if (isDragging) {
@@ -257,7 +233,6 @@ class VideoPlayer {
             }
         });
         
-        // マウスダウンでドラッグ開始
         wrapper.addEventListener('mousedown', (e) => {
             if (!this.isReady) return;
             e.preventDefault();
@@ -265,39 +240,39 @@ class VideoPlayer {
             
             isDragging = true;
             this.isSeeking = true;
-            overlay.classList.add('active');
-            this.elements.seekPreview.classList.add('active');
+            this.elements.seekPreview?.classList.add('active');
             
-            const rect = wrapper.getBoundingClientRect();
-            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const percent = getPercent(e);
             const time = percent * this.getDuration();
-            
             this.seekTo(time);
             this.updateSeekbarUI(percent);
             this.updatePreview(percent, time);
         });
         
-        // マウスアップでドラッグ終了
         document.addEventListener('mouseup', () => {
             if (isDragging) {
                 isDragging = false;
                 this.isSeeking = false;
-                overlay.classList.remove('active');
-                this.elements.seekPreview.classList.remove('active');
+                this.elements.seekPreview?.classList.remove('active');
             }
         });
         
-        // ドラッグ中のマウス移動
         document.addEventListener('mousemove', (e) => {
             if (!isDragging || !this.isReady) return;
-            
-            const rect = wrapper.getBoundingClientRect();
-            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const percent = getPercent(e);
             const time = percent * this.getDuration();
-            
             this.seekTo(time);
             this.updateSeekbarUI(percent);
             this.updatePreview(percent, time);
+        });
+        
+        // Also handle thumbnail strip clicks
+        this.elements.thumbnailStrip?.addEventListener('click', (e) => {
+            if (!this.isReady) return;
+            const rect = this.elements.thumbnailStrip.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const time = percent * this.getDuration();
+            this.seekTo(time);
         });
     }
     
@@ -307,48 +282,40 @@ class VideoPlayer {
         if (!preview || !wrapper) return;
         
         const rect = wrapper.getBoundingClientRect();
-        
-        // プレビューの位置を更新
-        const previewWidth = 160;
         const x = percent * rect.width;
-        const clampedX = Math.max(previewWidth / 2, Math.min(rect.width - previewWidth / 2, x));
+        const clampedX = Math.max(60, Math.min(rect.width - 60, x));
         preview.style.left = `${clampedX}px`;
         
-        // 時間表示を更新
         if (this.elements.previewTime) {
             this.elements.previewTime.textContent = this.formatTimeShort(time);
         }
         
-        // サムネイルプレビューを生成（ローカル動画のみ）
-        if (this.type === 'local' && this.elements.video && this.previewCtx) {
-            this.generateThumbnail(time);
+        // Draw preview thumbnail for local video
+        if (this.type === 'local' && this.previewCtx && this.elements.video) {
+            this.drawPreviewFrame(time);
         }
     }
     
-    generateThumbnail(time) {
-        const video = this.elements.video;
-        if (!video || video.readyState < 2) return;
+    drawPreviewFrame(time) {
+        // Use worker video for preview
+        if (!this.thumbnailWorkerVideo) return;
         
-        if (this.isSeeking) {
-            try {
-                this.previewCtx.drawImage(video, 0, 0, 160, 90);
-            } catch (e) {
-                // CORS error等は無視
-            }
+        const video = this.thumbnailWorkerVideo;
+        if (Math.abs(video.currentTime - time) > 0.5) {
+            video.currentTime = time;
         }
+        
+        try {
+            this.previewCtx.drawImage(video, 0, 0, 120, 68);
+        } catch (e) {}
     }
     
     updateSeekbarUI(percent) {
-        // プログレスバーの更新
         if (this.elements.seekProgress) {
             this.elements.seekProgress.style.width = `${percent * 100}%`;
         }
-        
-        // サムの位置更新
-        if (this.elements.seekThumb && this.elements.seekWrapper) {
-            const wrapper = this.elements.seekWrapper;
-            const rect = wrapper.getBoundingClientRect();
-            this.elements.seekThumb.style.left = `${percent * rect.width}px`;
+        if (this.elements.seekThumb) {
+            this.elements.seekThumb.style.left = `${percent * 100}%`;
         }
     }
     
@@ -356,34 +323,100 @@ class VideoPlayer {
         if (!this.isReady || this.type !== 'local') return;
         
         const video = this.elements.video;
-        if (video.buffered.length > 0) {
-            const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-            const duration = video.duration;
-            if (duration > 0 && this.elements.seekBuffer) {
-                this.elements.seekBuffer.style.width = `${(bufferedEnd / duration) * 100}%`;
+        if (video?.buffered.length > 0) {
+            const buffered = video.buffered.end(video.buffered.length - 1);
+            const percent = (buffered / video.duration) * 100;
+            if (this.elements.seekBuffer) {
+                this.elements.seekBuffer.style.width = `${percent}%`;
+            }
+        }
+    }
+    
+    updateCacheStatus(ready) {
+        this.cacheReady = ready;
+        const status = this.elements.cacheStatus;
+        if (status) {
+            const indicator = status.querySelector('.cache-indicator');
+            const text = status.querySelector('span:last-child');
+            if (ready) {
+                indicator?.classList.add('ready');
+                if (text) text.textContent = 'キャッシュ: 完了';
+            } else {
+                indicator?.classList.remove('ready');
+                if (text) text.textContent = 'キャッシュ: 読込中';
             }
         }
     }
 
-    updateZoomIndicator() {
-        const indicators = [
-            { level: 1, label: '1分単位' },
-            { level: 10, label: '10秒単位' },
-            { level: 25, label: '5秒単位' },
-            { level: 50, label: '1秒単位' },
-            { level: 75, label: '100ms単位' },
-            { level: 100, label: 'ミリ秒' }
-        ];
+    // Thumbnail Strip Generation
+    async generateThumbnailStrip() {
+        if (this.type !== 'local' || !this.elements.video || this.isGeneratingThumbnails) return;
         
-        let label = '1分単位';
-        for (const ind of indicators) {
-            if (this.zoomLevel >= ind.level) {
-                label = ind.label;
+        this.isGeneratingThumbnails = true;
+        const container = this.elements.thumbnailsContainer;
+        if (!container) return;
+        
+        container.innerHTML = '<div class="thumbnail-loading">サムネイル生成中...</div>';
+        
+        const video = this.elements.video;
+        const duration = video.duration;
+        if (!duration || duration === Infinity) {
+            container.innerHTML = '<div class="thumbnail-loading">サムネイル生成不可</div>';
+            this.isGeneratingThumbnails = false;
+            return;
+        }
+        
+        // Create worker video for thumbnail generation
+        this.thumbnailWorkerVideo = document.createElement('video');
+        this.thumbnailWorkerVideo.src = video.src;
+        this.thumbnailWorkerVideo.muted = true;
+        this.thumbnailWorkerVideo.preload = 'auto';
+        
+        await new Promise(resolve => {
+            this.thumbnailWorkerVideo.onloadeddata = resolve;
+            this.thumbnailWorkerVideo.onerror = resolve;
+        });
+        
+        // Generate thumbnails
+        const count = Math.min(this.thumbnailCount, Math.ceil(duration / 5)); // 1 per 5 sec max
+        const interval = duration / count;
+        const thumbWidth = Math.max(40, this.elements.thumbnailStrip.offsetWidth / count);
+        
+        container.innerHTML = '';
+        this.thumbnails = [];
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = thumbWidth;
+        canvas.height = 40;
+        const ctx = canvas.getContext('2d');
+        
+        for (let i = 0; i < count; i++) {
+            const time = i * interval;
+            
+            try {
+                this.thumbnailWorkerVideo.currentTime = time;
+                await new Promise(resolve => {
+                    this.thumbnailWorkerVideo.onseeked = resolve;
+                    setTimeout(resolve, 200); // Fallback timeout
+                });
+                
+                ctx.drawImage(this.thumbnailWorkerVideo, 0, 0, thumbWidth, 40);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                
+                const thumbDiv = document.createElement('div');
+                thumbDiv.className = 'thumbnail-item';
+                thumbDiv.style.width = `${thumbWidth}px`;
+                thumbDiv.style.backgroundImage = `url(${dataUrl})`;
+                container.appendChild(thumbDiv);
+                
+                this.thumbnails.push({ time, dataUrl });
+            } catch (e) {
+                console.warn('Thumbnail generation error:', e);
             }
         }
-        if (this.elements.zoomIndicator) {
-            this.elements.zoomIndicator.textContent = label;
-        }
+        
+        this.isGeneratingThumbnails = false;
+        Toast.show('サムネイル生成完了', 'success');
     }
 
     throttledTimeUpdate() {
@@ -395,25 +428,19 @@ class VideoPlayer {
     }
 
     captureStartTime() {
-        const currentTime = this.getCurrentTime();
-        this.startTime = currentTime;
-        this.elements.startTimeInput.value = this.formatTimeInput(currentTime);
-        Toast.show('開始位置を設定しました', 'success');
+        this.startTime = this.getCurrentTime();
+        if (this.elements.startTimeInput) {
+            this.elements.startTimeInput.value = this.formatTimeInput(this.startTime);
+        }
+        Toast.show('開始位置を設定', 'success');
     }
 
     parseTimeInput(value) {
         if (!value) return 0;
-        
         const parts = value.split(':').map(p => parseFloat(p) || 0);
-        
-        if (parts.length === 1) {
-            return parts[0];
-        } else if (parts.length === 2) {
-            return parts[0] * 60 + parts[1];
-        } else if (parts.length >= 3) {
-            return parts[0] * 3600 + parts[1] * 60 + parts[2];
-        }
-        return 0;
+        if (parts.length === 1) return parts[0];
+        if (parts.length === 2) return parts[0] * 60 + parts[1];
+        return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
     }
 
     formatTimeInput(seconds) {
@@ -435,13 +462,13 @@ class VideoPlayer {
     loadSavedName() {
         const settings = Storage.loadSettings();
         const name = settings[`player${this.key}Name`];
-        if (name) {
+        if (name && this.elements.nameInput) {
             this.elements.nameInput.value = name;
         }
     }
 
     loadFromUrl() {
-        const url = this.elements.urlInput.value.trim();
+        const url = this.elements.urlInput?.value.trim();
         if (!url) {
             Toast.show('URLを入力してください', 'warning');
             return;
@@ -460,10 +487,9 @@ class VideoPlayer {
             /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
             /youtube\.com\/shorts\/([^&\n?#]+)/
         ];
-
-        for (const pattern of patterns) {
-            const match = url.match(pattern);
-            if (match) return match[1];
+        for (const p of patterns) {
+            const m = url.match(p);
+            if (m) return m[1];
         }
         return null;
     }
@@ -476,15 +502,19 @@ class VideoPlayer {
         this.elements.placeholder.style.display = 'none';
         this.elements.video.style.display = 'none';
         
-        // YouTubeコンテナを再作成（APIが要素を置き換えるため）
         this.recreateYoutubeContainer();
         this.elements.youtubeContainer.style.display = 'block';
+        
+        // Hide thumbnail strip for YouTube
+        if (this.elements.thumbnailsContainer) {
+            this.elements.thumbnailsContainer.innerHTML = '<div class="thumbnail-loading">YouTube: サムネイル非対応</div>';
+        }
 
         if (typeof YT === 'undefined' || !YT.Player) {
-            Toast.show('YouTube API を読み込み中...', 'warning');
-            const checkAPI = setInterval(() => {
+            Toast.show('YouTube API 読み込み中...', 'info');
+            const check = setInterval(() => {
                 if (typeof YT !== 'undefined' && YT.Player) {
-                    clearInterval(checkAPI);
+                    clearInterval(check);
                     this.createYoutubePlayer(videoId);
                 }
             }, 100);
@@ -494,38 +524,27 @@ class VideoPlayer {
     }
 
     recreateYoutubeContainer() {
-        // 古いコンテナを削除して新しいdivを作成
-        const oldContainer = this.elements.youtubeContainer;
-        if (oldContainer) {
-            const parent = oldContainer.parentElement;
-            const newContainer = document.createElement('div');
-            newContainer.id = this.youtubeContainerId;
-            newContainer.className = 'youtube-player';
-            newContainer.style.display = 'none';
-            
-            // シークバーオーバーレイの前に挿入
-            const seekOverlay = parent.querySelector('.seekbar-overlay');
-            if (seekOverlay) {
-                parent.insertBefore(newContainer, seekOverlay);
-            } else {
-                parent.appendChild(newContainer);
-            }
-            
-            oldContainer.remove();
-            this.elements.youtubeContainer = newContainer;
+        const old = this.elements.youtubeContainer;
+        if (old) {
+            const parent = old.parentElement;
+            const newEl = document.createElement('div');
+            newEl.id = this.youtubeContainerId;
+            newEl.className = 'youtube-player';
+            newEl.style.display = 'none';
+            parent.insertBefore(newEl, old);
+            old.remove();
+            this.elements.youtubeContainer = newEl;
         }
     }
 
     createYoutubePlayer(videoId) {
         if (this.youtubePlayer) {
-            try {
-                this.youtubePlayer.destroy();
-            } catch (e) {}
+            try { this.youtubePlayer.destroy(); } catch (e) {}
             this.youtubePlayer = null;
         }
 
         this.youtubePlayer = new YT.Player(this.youtubeContainerId, {
-            videoId: videoId,
+            videoId,
             playerVars: {
                 autoplay: 0,
                 controls: 0,
@@ -543,45 +562,31 @@ class VideoPlayer {
         });
     }
 
-    handleYoutubeReady(event) {
+    handleYoutubeReady() {
         this.isReady = true;
         this.startTimeUpdateLoop();
         
-        // 動画の長さを表示
         const duration = this.getDuration();
         if (this.elements.durationDisplay) {
             this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
         }
         
-        if (this.startTime > 0) {
-            this.seekTo(this.startTime);
-        }
+        this.updateCacheStatus(true);
+        
+        if (this.startTime > 0) this.seekTo(this.startTime);
         
         this.onReady(this);
-        Toast.show(`${this.elements.nameInput.value}: YouTube動画を読み込みました`, 'success');
+        Toast.show(`${this.elements.nameInput?.value || 'Player'}: YouTube読込完了`, 'success');
     }
 
     handleYoutubeStateChange(event) {
-        const states = {
-            [-1]: 'unstarted',
-            [0]: 'ended',
-            [1]: 'playing',
-            [2]: 'paused',
-            [3]: 'buffering',
-            [5]: 'cued'
-        };
+        const states = { [-1]: 'unstarted', 0: 'ended', 1: 'playing', 2: 'paused', 3: 'buffering', 5: 'cued' };
         this.handleStateChange(states[event.data] || 'unknown');
     }
 
     handleYoutubeError(event) {
-        const errors = {
-            2: '無効なパラメータ',
-            5: 'HTMLプレイヤーエラー',
-            100: '動画が見つかりません',
-            101: '埋め込み再生が許可されていません',
-            150: '埋め込み再生が許可されていません'
-        };
-        Toast.show(`YouTube エラー: ${errors[event.data] || '不明なエラー'}`, 'error');
+        const errors = { 2: '無効なパラメータ', 100: '動画が見つかりません', 101: '埋め込み不可', 150: '埋め込み不可' };
+        Toast.show(`YouTube: ${errors[event.data] || 'エラー'}`, 'error');
     }
 
     loadLocalFile(file) {
@@ -595,80 +600,65 @@ class VideoPlayer {
 
         const url = URL.createObjectURL(file);
         this.elements.video.src = url;
-        this.videoElement = this.elements.video;
         this.elements.video.preload = 'auto';
         this.elements.video.load();
         
-        Toast.show(`${file.name} を読み込み中...`, 'info');
+        this.updateCacheStatus(false);
+        Toast.show(`${file.name} 読込中...`, 'info');
     }
 
     handleVideoLoaded() {
         this.isReady = true;
         
-        // 動画の長さを表示
         const duration = this.getDuration();
         if (this.elements.durationDisplay) {
             this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
         }
         
-        if (this.startTime > 0) {
-            this.seekTo(this.startTime);
-        }
+        if (this.startTime > 0) this.seekTo(this.startTime);
+        
+        // Generate thumbnail strip
+        setTimeout(() => this.generateThumbnailStrip(), 500);
         
         this.onReady(this);
-        Toast.show(`${this.elements.nameInput.value}: ローカル動画を読み込みました`, 'success');
+        Toast.show(`${this.elements.nameInput?.value || 'Player'}: 動画読込完了`, 'success');
     }
 
     handleTimeUpdate() {
-        const currentTime = this.getCurrentTime();
+        const time = this.getCurrentTime();
         const duration = this.getDuration();
         
-        // 時間表示更新
         if (this.elements.timeDisplay) {
-            this.elements.timeDisplay.textContent = this.formatTime(currentTime);
+            this.elements.timeDisplay.textContent = this.formatTime(time);
         }
         if (this.elements.currentTimeDisplay) {
-            this.elements.currentTimeDisplay.textContent = this.formatTimeShort(currentTime);
+            this.elements.currentTimeDisplay.textContent = this.formatTimeShort(time);
         }
         
-        // シークバー更新（ドラッグ中でなければ）
         if (duration > 0 && !this.isSeeking) {
-            const percent = currentTime / duration;
-            this.updateSeekbarUI(percent);
+            this.updateSeekbarUI(time / duration);
         }
         
         this.updateVolumeIcon();
-        this.onTimeUpdate(currentTime, this);
+        this.onTimeUpdate(time, this);
     }
 
     updateVolumeIcon() {
-        const volume = parseInt(this.elements.volumeSlider.value);
+        const vol = parseInt(this.elements.volumeSlider?.value || 100);
         let icon = '🔊';
-        if (volume === 0) icon = '🔇';
-        else if (volume < 50) icon = '🔉';
-        if (this.elements.volumeIcon) {
-            this.elements.volumeIcon.textContent = icon;
-        }
+        if (vol === 0) icon = '🔇';
+        else if (vol < 50) icon = '🔉';
+        if (this.elements.volumeIcon) this.elements.volumeIcon.textContent = icon;
     }
 
     handleStateChange(state) {
-        const icon = this.elements.playPauseBtn.querySelector('.play-icon');
-        if (icon) {
-            if (state === 'playing') {
-                icon.textContent = '⏸️';
-            } else {
-                icon.textContent = '▶️';
-            }
-        }
-
+        const icon = this.elements.playPauseBtn?.querySelector('.play-icon');
+        if (icon) icon.textContent = state === 'playing' ? '⏸️' : '▶️';
         this.onStateChange(state, this);
     }
 
     startTimeUpdateLoop() {
-        if (this.timeUpdateInterval) {
-            clearInterval(this.timeUpdateInterval);
-        }
-
+        if (this.timeUpdateInterval) clearInterval(this.timeUpdateInterval);
         this.timeUpdateInterval = setInterval(() => {
             if (this.type === 'youtube' && this.youtubePlayer && this.isReady) {
                 this.handleTimeUpdate();
@@ -676,147 +666,95 @@ class VideoPlayer {
         }, 100);
     }
 
-    // ========================================
-    // プレイヤー制御メソッド
-    // ========================================
-
+    // Player Controls
     play() {
         if (!this.isReady) return;
-
-        if (this.type === 'youtube' && this.youtubePlayer) {
-            this.youtubePlayer.playVideo();
-        } else if (this.type === 'local' && this.elements.video) {
-            this.elements.video.play();
-        }
+        if (this.type === 'youtube') this.youtubePlayer?.playVideo();
+        else this.elements.video?.play();
     }
 
     pause() {
         if (!this.isReady) return;
-
-        if (this.type === 'youtube' && this.youtubePlayer) {
-            this.youtubePlayer.pauseVideo();
-        } else if (this.type === 'local' && this.elements.video) {
-            this.elements.video.pause();
-        }
+        if (this.type === 'youtube') this.youtubePlayer?.pauseVideo();
+        else this.elements.video?.pause();
     }
 
     togglePlayPause() {
-        if (this.isPlaying()) {
-            this.pause();
-        } else {
-            this.play();
-        }
+        this.isPlaying() ? this.pause() : this.play();
     }
 
     isPlaying() {
         if (!this.isReady) return false;
-
-        if (this.type === 'youtube' && this.youtubePlayer) {
-            return this.youtubePlayer.getPlayerState() === 1;
-        } else if (this.type === 'local' && this.elements.video) {
-            return !this.elements.video.paused;
-        }
-        return false;
+        if (this.type === 'youtube') return this.youtubePlayer?.getPlayerState() === 1;
+        return this.elements.video && !this.elements.video.paused;
     }
 
     getCurrentTime() {
         if (!this.isReady) return 0;
-
-        if (this.type === 'youtube' && this.youtubePlayer) {
-            try {
-                return this.youtubePlayer.getCurrentTime() || 0;
-            } catch (e) {
-                return 0;
-            }
-        } else if (this.type === 'local' && this.elements.video) {
-            return this.elements.video.currentTime || 0;
-        }
-        return 0;
+        try {
+            if (this.type === 'youtube') return this.youtubePlayer?.getCurrentTime() || 0;
+            return this.elements.video?.currentTime || 0;
+        } catch { return 0; }
     }
 
     getDuration() {
         if (!this.isReady) return 0;
-
-        if (this.type === 'youtube' && this.youtubePlayer) {
-            try {
-                return this.youtubePlayer.getDuration() || 0;
-            } catch (e) {
-                return 0;
-            }
-        } else if (this.type === 'local' && this.elements.video) {
-            return this.elements.video.duration || 0;
-        }
-        return 0;
+        try {
+            if (this.type === 'youtube') return this.youtubePlayer?.getDuration() || 0;
+            return this.elements.video?.duration || 0;
+        } catch { return 0; }
     }
 
     seekTo(time) {
         if (!this.isReady) return;
-
-        const duration = this.getDuration();
-        if (duration === 0) return;
+        const dur = this.getDuration();
+        if (dur === 0) return;
+        time = Math.max(0, Math.min(time, dur));
         
-        time = Math.max(0, Math.min(time, duration));
-
-        if (this.type === 'youtube' && this.youtubePlayer) {
-            this.youtubePlayer.seekTo(time, true);
-        } else if (this.type === 'local' && this.elements.video) {
-            this.elements.video.currentTime = time;
-        }
+        if (this.type === 'youtube') this.youtubePlayer?.seekTo(time, true);
+        else if (this.elements.video) this.elements.video.currentTime = time;
     }
 
-    frameStep(direction) {
+    frameStep(frames) {
         if (!this.isReady) return;
-
         const frameTime = 1 / this.frameRate;
-        const currentTime = this.getCurrentTime();
-        const newTime = currentTime + (direction * frameTime);
-        
+        const newTime = this.getCurrentTime() + (frames * frameTime);
         this.pause();
         this.seekTo(newTime);
     }
 
-    setVolume(volume) {
-        volume = Math.max(0, Math.min(1, volume));
-
+    setVolume(vol) {
+        vol = Math.max(0, Math.min(1, vol));
         if (this.type === 'youtube' && this.youtubePlayer && this.isReady) {
-            this.youtubePlayer.setVolume(volume * 100);
-        } else if (this.type === 'local' && this.elements.video) {
-            this.elements.video.volume = volume;
+            this.youtubePlayer.setVolume(vol * 100);
+        } else if (this.elements.video) {
+            this.elements.video.volume = vol;
         }
-        
         this.updateVolumeIcon();
     }
 
     setPlaybackRate(rate) {
         if (!this.isReady) return;
-
-        if (this.type === 'youtube' && this.youtubePlayer) {
-            this.youtubePlayer.setPlaybackRate(rate);
-        } else if (this.type === 'local' && this.elements.video) {
-            this.elements.video.playbackRate = rate;
-        }
+        if (this.type === 'youtube') this.youtubePlayer?.setPlaybackRate(rate);
+        else if (this.elements.video) this.elements.video.playbackRate = rate;
     }
 
-    formatTime(seconds) {
-        if (isNaN(seconds)) seconds = 0;
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-        const ms = Math.floor((seconds % 1) * 1000);
-
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+    formatTime(s) {
+        if (isNaN(s)) s = 0;
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = Math.floor(s % 60);
+        const ms = Math.floor((s % 1) * 1000);
+        return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}.${ms.toString().padStart(3,'0')}`;
     }
 
-    formatTimeShort(seconds) {
-        if (isNaN(seconds)) seconds = 0;
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-
-        if (h > 0) {
-            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        }
-        return `${m}:${s.toString().padStart(2, '0')}`;
+    formatTimeShort(s) {
+        if (isNaN(s)) s = 0;
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = Math.floor(s % 60);
+        if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+        return `${m}:${sec.toString().padStart(2,'0')}`;
     }
 
     cleanup() {
@@ -826,43 +764,36 @@ class VideoPlayer {
         }
 
         if (this.youtubePlayer) {
-            try {
-                this.youtubePlayer.destroy();
-            } catch (e) {
-                // Ignore errors during cleanup
-            }
+            try { this.youtubePlayer.destroy(); } catch {}
             this.youtubePlayer = null;
         }
 
-        if (this.elements.video && this.elements.video.src) {
+        if (this.elements.video?.src) {
             this.elements.video.pause();
             URL.revokeObjectURL(this.elements.video.src);
             this.elements.video.src = '';
             this.elements.video.load();
         }
-
-        // Reset seekbar UI
-        if (this.elements.seekProgress) {
-            this.elements.seekProgress.style.width = '0%';
-        }
-        if (this.elements.seekBuffer) {
-            this.elements.seekBuffer.style.width = '0%';
-        }
-        if (this.elements.seekThumb) {
-            this.elements.seekThumb.style.left = '0px';
-        }
-        if (this.elements.currentTimeDisplay) {
-            this.elements.currentTimeDisplay.textContent = '0:00';
-        }
-        if (this.elements.durationDisplay) {
-            this.elements.durationDisplay.textContent = '0:00';
+        
+        if (this.thumbnailWorkerVideo) {
+            this.thumbnailWorkerVideo.src = '';
+            this.thumbnailWorkerVideo = null;
         }
 
+        // Reset UI
+        if (this.elements.seekProgress) this.elements.seekProgress.style.width = '0%';
+        if (this.elements.seekBuffer) this.elements.seekBuffer.style.width = '0%';
+        if (this.elements.seekThumb) this.elements.seekThumb.style.left = '0%';
+        if (this.elements.currentTimeDisplay) this.elements.currentTimeDisplay.textContent = '0:00';
+        if (this.elements.durationDisplay) this.elements.durationDisplay.textContent = '0:00';
+        
+        this.thumbnails = [];
+        this.isGeneratingThumbnails = false;
+        this.cacheReady = false;
         this.isReady = false;
         this.type = null;
         this.videoUrl = null;
     }
 }
 
-// グローバルに公開
 window.VideoPlayer = VideoPlayer;
