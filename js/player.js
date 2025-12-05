@@ -15,6 +15,10 @@ class VideoPlayer {
         this.isSeeking = false;
         this.precision = 50;
         
+        // Frame markers
+        this.startMarker = null; // Start frame time in seconds
+        this.endMarker = null;   // End frame time in seconds
+        
         // Callbacks
         this.onTimeUpdate = options.onTimeUpdate || (() => {});
         this.onStateChange = options.onStateChange || (() => {});
@@ -62,9 +66,15 @@ class VideoPlayer {
             fpsSelect: document.getElementById(`${p}Fps`),
             timeDisplay: document.getElementById(`${p}Time`),
             nameInput: document.getElementById(`${p}Name`),
-            startTimeInput: document.getElementById(`${p}StartTime`),
-            setStartBtn: document.getElementById(`${p}SetStart`),
             container: document.getElementById(`${p}Container`),
+            // Marker elements
+            setStartBtn: document.getElementById(`${p}SetStart`),
+            setEndBtn: document.getElementById(`${p}SetEnd`),
+            goStartBtn: document.getElementById(`${p}GoStart`),
+            goEndBtn: document.getElementById(`${p}GoEnd`),
+            startValue: document.getElementById(`${p}StartValue`),
+            endValue: document.getElementById(`${p}EndValue`),
+            segmentValue: document.getElementById(`${p}Segment`),
             // Timeline
             timeline: document.getElementById(`${p}Timeline`),
             thumbnailStrip: document.getElementById(`${p}ThumbnailStrip`),
@@ -106,8 +116,15 @@ class VideoPlayer {
         // FPS select
         this.elements.fpsSelect?.addEventListener('change', (e) => {
             this.frameRate = parseInt(e.target.value);
+            this.updateMarkerDisplay(); // Update frame display with new fps
             Toast.show(`${this.frameRate}fps に設定`, 'success');
         });
+
+        // Marker controls
+        this.elements.setStartBtn?.addEventListener('click', () => this.setStartMarker());
+        this.elements.setEndBtn?.addEventListener('click', () => this.setEndMarker());
+        this.elements.goStartBtn?.addEventListener('click', () => this.goToStartMarker());
+        this.elements.goEndBtn?.addEventListener('click', () => this.goToEndMarker());
 
         // Playback controls
         this.elements.playPauseBtn?.addEventListener('click', () => this.togglePlayPause());
@@ -226,6 +243,80 @@ class VideoPlayer {
             const newTime = this.getCurrentTime() + seconds;
             this.seekTo(newTime);
         }
+    }
+
+    // ==================== Marker Methods ====================
+    
+    setStartMarker() {
+        if (!this.isReady) return;
+        this.startMarker = this.getCurrentTime();
+        this.updateMarkerDisplay();
+        Toast.show('Start marker set', 'success');
+    }
+    
+    setEndMarker() {
+        if (!this.isReady) return;
+        this.endMarker = this.getCurrentTime();
+        this.updateMarkerDisplay();
+        Toast.show('End marker set', 'success');
+    }
+    
+    goToStartMarker() {
+        if (this.startMarker !== null) {
+            this.seekTo(this.startMarker);
+        }
+    }
+    
+    goToEndMarker() {
+        if (this.endMarker !== null) {
+            this.seekTo(this.endMarker);
+        }
+    }
+    
+    updateMarkerDisplay() {
+        // Update start marker display
+        if (this.elements.startValue) {
+            if (this.startMarker !== null) {
+                this.elements.startValue.textContent = this.formatTimeWithFrames(this.startMarker);
+            } else {
+                this.elements.startValue.textContent = '--:--:--:--';
+            }
+        }
+        
+        // Update end marker display
+        if (this.elements.endValue) {
+            if (this.endMarker !== null) {
+                this.elements.endValue.textContent = this.formatTimeWithFrames(this.endMarker);
+            } else {
+                this.elements.endValue.textContent = '--:--:--:--';
+            }
+        }
+        
+        // Update segment duration
+        if (this.elements.segmentValue) {
+            if (this.startMarker !== null && this.endMarker !== null) {
+                const diff = Math.abs(this.endMarker - this.startMarker);
+                const frames = Math.round(diff * this.frameRate);
+                this.elements.segmentValue.textContent = `${this.formatTimeWithFrames(diff)} (${frames}f)`;
+            } else {
+                this.elements.segmentValue.textContent = '--';
+            }
+        }
+    }
+    
+    formatTimeWithFrames(seconds) {
+        if (seconds === null || seconds === undefined) return '--:--:--:--';
+        
+        const totalSeconds = Math.floor(seconds);
+        const hours = Math.floor(totalSeconds / 3600);
+        const mins = Math.floor((totalSeconds % 3600) / 60);
+        const secs = totalSeconds % 60;
+        const frameInSecond = Math.round((seconds - totalSeconds) * this.frameRate);
+        
+        if (hours > 0) {
+            return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}:${frameInSecond.toString().padStart(2, '0')}`;
+        }
+        return `${mins}:${secs.toString().padStart(2, '0')}:${frameInSecond.toString().padStart(2, '0')}`;
     }
 
     setupDragDrop() {

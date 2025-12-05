@@ -122,12 +122,24 @@
                             <button class="btn btn-small btn-secondary step-btn" data-step="30">+30s</button>
                             <button class="btn btn-small btn-secondary step-btn" data-step="60">+1m</button>
                         </div>
-                        <div class="control-row playback-controls">
-                            <div class="start-position">
-                                <span>開始:</span>
-                                <input type="text" id="playerAStartTime" class="start-position-input" value="0:00">
-                                <button class="btn btn-small btn-ghost" id="playerASetStart">📍</button>
+                        <!-- Frame Markers -->
+                        <div class="control-row marker-controls">
+                            <div class="marker-group">
+                                <button class="btn btn-small btn-primary" id="playerASetStart">Set Start</button>
+                                <span class="marker-value" id="playerAStartValue">--:--:--:--</span>
+                                <button class="btn btn-small btn-ghost" id="playerAGoStart">▶</button>
                             </div>
+                            <div class="marker-group">
+                                <button class="btn btn-small btn-secondary" id="playerASetEnd">Set End</button>
+                                <span class="marker-value" id="playerAEndValue">--:--:--:--</span>
+                                <button class="btn btn-small btn-ghost" id="playerAGoEnd">▶</button>
+                            </div>
+                            <div class="segment-time">
+                                <span class="segment-label">区間:</span>
+                                <span class="segment-value" id="playerASegment">--</span>
+                            </div>
+                        </div>
+                        <div class="control-row playback-controls">
                             <div class="volume-control">
                                 <span class="volume-icon" id="playerAVolumeIcon">🔊</span>
                                 <input type="range" id="playerAVolume" class="volume-slider" min="0" max="100" value="100">
@@ -235,12 +247,24 @@
                             <button class="btn btn-small btn-secondary step-btn" data-step="30">+30s</button>
                             <button class="btn btn-small btn-secondary step-btn" data-step="60">+1m</button>
                         </div>
-                        <div class="control-row playback-controls">
-                            <div class="start-position">
-                                <span>開始:</span>
-                                <input type="text" id="playerBStartTime" class="start-position-input" value="0:00">
-                                <button class="btn btn-small btn-ghost" id="playerBSetStart">📍</button>
+                        <!-- Frame Markers -->
+                        <div class="control-row marker-controls">
+                            <div class="marker-group">
+                                <button class="btn btn-small btn-primary" id="playerBSetStart">Set Start</button>
+                                <span class="marker-value" id="playerBStartValue">--:--:--:--</span>
+                                <button class="btn btn-small btn-ghost" id="playerBGoStart">▶</button>
                             </div>
+                            <div class="marker-group">
+                                <button class="btn btn-small btn-secondary" id="playerBSetEnd">Set End</button>
+                                <span class="marker-value" id="playerBEndValue">--:--:--:--</span>
+                                <button class="btn btn-small btn-ghost" id="playerBGoEnd">▶</button>
+                            </div>
+                            <div class="segment-time">
+                                <span class="segment-label">区間:</span>
+                                <span class="segment-value" id="playerBSegment">--</span>
+                            </div>
+                        </div>
+                        <div class="control-row playback-controls">
                             <div class="volume-control">
                                 <span class="volume-icon" id="playerBVolumeIcon">🔊</span>
                                 <input type="range" id="playerBVolume" class="volume-slider" min="0" max="100" value="100">
@@ -350,6 +374,10 @@
                 <h3>📐 ステップボタン</h3>
                 <p>-1m,-30s,-10s,-5s,-1s,-10f,-1f / +1f,+10f,+1s,+5s,+10s,+30s,+1m<br>
                 FPS設定で30fps/60fpsを選択可能。</p>
+                <h3>📍 フレームマーカー</h3>
+                <p><strong>Set Start</strong>: 現在位置をスタートフレームとして設定<br>
+                <strong>Set End</strong>: 現在位置をエンドフレームとして設定<br>
+                <strong>区間</strong>: Start〜End間の時間とフレーム数を表示</p>
             </div>
         </div>
     </div>
