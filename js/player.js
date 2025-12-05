@@ -1,7 +1,7 @@
 /**
  * RyounoMe - Player Module
  * 動画プレイヤーの管理（YouTube / ローカルファイル対応）
- * Netflix/YouTube style seekbar with thumbnail preview
+ * With overlay seekbar and thumbnail preview
  */
 
 class VideoPlayer {
@@ -11,12 +11,11 @@ class VideoPlayer {
         this.videoElement = null;
         this.youtubePlayer = null;
         this.videoUrl = null;
-        this.youtubeVideoId = null;
         this.isReady = false;
         this.frameRate = options.frameRate || 30;
         this.startTime = 0;
         this.zoomLevel = 1;
-        this.isDragging = false;
+        this.isSeeking = false;
         
         // Callbacks
         this.onTimeUpdate = options.onTimeUpdate || (() => {});
@@ -27,10 +26,9 @@ class VideoPlayer {
         this.lastTimeUpdate = 0;
         this.timeUpdateThrottle = 50;
         
-        // Thumbnail generation
-        this.thumbnailCanvas = null;
-        this.thumbnailCtx = null;
-        this.thumbnailVideo = null; // Hidden video for thumbnail generation
+        // Preview canvas
+        this.previewCanvas = null;
+        this.previewCtx = null;
         
         this.initElements();
         this.bindEvents();
@@ -56,27 +54,32 @@ class VideoPlayer {
             volumeSlider: document.getElementById(`${prefix}Volume`),
             volumeIcon: document.getElementById(`${prefix}VolumeIcon`),
             speedSelect: document.getElementById(`${prefix}Speed`),
-            zoomSlider: document.getElementById(`${prefix}Zoom`),
-            zoomIndicator: document.getElementById(`${prefix}ZoomIndicator`),
             timeDisplay: document.getElementById(`${prefix}Time`),
             nameInput: document.getElementById(`${prefix}Name`),
             startTimeInput: document.getElementById(`${prefix}StartTime`),
             setStartBtn: document.getElementById(`${prefix}SetStart`),
-            // Overlay elements
-            overlay: document.getElementById(`${prefix}Overlay`),
+            zoomSlider: document.getElementById(`${prefix}Zoom`),
+            zoomIndicator: document.getElementById(`${prefix}ZoomIndicator`),
+            // Overlay seekbar elements
+            seekOverlay: document.getElementById(`${prefix}SeekOverlay`),
             seekWrapper: document.getElementById(`${prefix}SeekWrapper`),
-            progress: document.getElementById(`${prefix}Progress`),
-            thumb: document.getElementById(`${prefix}Thumb`),
-            thumbnail: document.getElementById(`${prefix}Thumbnail`),
-            thumbnailCanvas: document.getElementById(`${prefix}ThumbnailCanvas`),
-            thumbnailTime: document.getElementById(`${prefix}ThumbnailTime`),
+            seekPreview: document.getElementById(`${prefix}SeekPreview`),
+            previewCanvas: document.getElementById(`${prefix}PreviewCanvas`),
+            previewTime: document.getElementById(`${prefix}PreviewTime`),
+            seekProgress: document.getElementById(`${prefix}Progress`),
+            seekBuffer: document.getElementById(`${prefix}Buffer`),
+            seekThumb: document.getElementById(`${prefix}Thumb`),
             currentTimeDisplay: document.getElementById(`${prefix}CurrentTime`),
             durationDisplay: document.getElementById(`${prefix}Duration`)
         };
         
-        // Initialize thumbnail canvas
-        this.thumbnailCanvas = this.elements.thumbnailCanvas;
-        this.thumbnailCtx = this.thumbnailCanvas.getContext('2d');
+        // Initialize preview canvas
+        this.previewCanvas = this.elements.previewCanvas;
+        if (this.previewCanvas) {
+            this.previewCanvas.width = 160;
+            this.previewCanvas.height = 90;
+            this.previewCtx = this.previewCanvas.getContext('2d');
+        }
     }
 
     bindEvents() {
@@ -100,13 +103,6 @@ class VideoPlayer {
         this.elements.playPauseBtn.addEventListener('click', () => this.togglePlayPause());
         this.elements.frameBackBtn.addEventListener('click', () => this.frameStep(-1));
         this.elements.frameForwardBtn.addEventListener('click', () => this.frameStep(1));
-        
-        // 動画クリックで再生/一時停止
-        this.elements.screen.addEventListener('click', (e) => {
-            // シークバー操作中は無視
-            if (e.target.closest('.overlay-seekbar-wrapper')) return;
-            this.togglePlayPause();
-        });
 
         // 音量
         this.elements.volumeSlider.addEventListener('input', (e) => {
@@ -141,10 +137,7 @@ class VideoPlayer {
         });
 
         // 開始位置設定
-        this.elements.setStartBtn.addEventListener('click', () => {
-            this.captureStartTime();
-        });
-        
+        this.elements.setStartBtn.addEventListener('click', () => this.captureStartTime());
         this.elements.startTimeInput.addEventListener('change', (e) => {
             this.startTime = this.parseTimeInput(e.target.value);
         });
@@ -155,187 +148,149 @@ class VideoPlayer {
         });
 
         // ローカルビデオのイベント
-        this.elements.video.addEventListener('timeupdate', () => {
-            this.throttledTimeUpdate();
-        });
+        this.elements.video.addEventListener('timeupdate', () => this.throttledTimeUpdate());
         this.elements.video.addEventListener('play', () => this.handleStateChange('playing'));
         this.elements.video.addEventListener('pause', () => this.handleStateChange('paused'));
         this.elements.video.addEventListener('ended', () => this.handleStateChange('ended'));
         this.elements.video.addEventListener('loadedmetadata', () => this.handleVideoLoaded());
+        this.elements.video.addEventListener('progress', () => this.updateBuffer());
         
-        this.elements.video.addEventListener('seeking', () => {
-            this.elements.container.classList.add('seeking');
-        });
-        this.elements.video.addEventListener('seeked', () => {
-            this.elements.container.classList.remove('seeking');
+        // 動画クリックで再生/一時停止
+        this.elements.screen.addEventListener('click', (e) => {
+            // シークバー上のクリックは除外
+            if (!e.target.closest('.seekbar-overlay')) {
+                this.togglePlayPause();
+            }
         });
     }
 
     setupOverlaySeekbar() {
         const wrapper = this.elements.seekWrapper;
-        const track = wrapper.querySelector('.overlay-seekbar-track');
+        const overlay = this.elements.seekOverlay;
         
-        // マウスムーブでサムネイルプレビュー
+        let isDragging = false;
+        
+        // マウス移動時のプレビュー表示
         wrapper.addEventListener('mousemove', (e) => {
             if (!this.isReady) return;
             
-            const rect = track.getBoundingClientRect();
+            const rect = wrapper.getBoundingClientRect();
             const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
             const time = percent * this.getDuration();
             
-            // サムネイルプレビューを更新
-            this.updateThumbnailPreview(time, e.clientX - rect.left, rect.width);
+            this.updatePreview(percent, time);
             
-            // ドラッグ中はシーク
-            if (this.isDragging) {
+            if (isDragging) {
                 this.seekTo(time);
-                this.updateProgressBar(percent);
+                this.updateSeekbarUI(percent);
             }
         });
         
         // マウスダウンでドラッグ開始
         wrapper.addEventListener('mousedown', (e) => {
             if (!this.isReady) return;
+            e.preventDefault();
             
-            this.isDragging = true;
-            this.elements.overlay.classList.add('active');
+            isDragging = true;
+            this.isSeeking = true;
+            overlay.classList.add('active');
+            this.elements.seekPreview.classList.add('active');
             
-            const rect = track.getBoundingClientRect();
+            const rect = wrapper.getBoundingClientRect();
             const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
             const time = percent * this.getDuration();
             
             this.seekTo(time);
-            this.updateProgressBar(percent);
+            this.updateSeekbarUI(percent);
+            this.updatePreview(percent, time);
         });
         
         // マウスアップでドラッグ終了
         document.addEventListener('mouseup', () => {
-            if (this.isDragging) {
-                this.isDragging = false;
-                this.elements.overlay.classList.remove('active');
+            if (isDragging) {
+                isDragging = false;
+                this.isSeeking = false;
+                overlay.classList.remove('active');
+                this.elements.seekPreview.classList.remove('active');
             }
         });
         
-        // マウスがドキュメント上を移動中もドラッグを追跡
+        // ドラッグ中のマウス移動
         document.addEventListener('mousemove', (e) => {
-            if (!this.isDragging || !this.isReady) return;
+            if (!isDragging || !this.isReady) return;
             
-            const rect = track.getBoundingClientRect();
+            const rect = wrapper.getBoundingClientRect();
             const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
             const time = percent * this.getDuration();
             
             this.seekTo(time);
-            this.updateProgressBar(percent);
-            this.updateThumbnailPreview(time, e.clientX - rect.left, rect.width);
+            this.updateSeekbarUI(percent);
+            this.updatePreview(percent, time);
         });
         
-        // タッチサポート
-        wrapper.addEventListener('touchstart', (e) => {
-            if (!this.isReady) return;
-            e.preventDefault();
-            
-            this.isDragging = true;
-            this.elements.overlay.classList.add('active');
-            
-            const rect = track.getBoundingClientRect();
-            const touch = e.touches[0];
-            const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
-            const time = percent * this.getDuration();
-            
-            this.seekTo(time);
-            this.updateProgressBar(percent);
-        }, { passive: false });
-        
-        wrapper.addEventListener('touchmove', (e) => {
-            if (!this.isDragging || !this.isReady) return;
-            e.preventDefault();
-            
-            const rect = track.getBoundingClientRect();
-            const touch = e.touches[0];
-            const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
-            const time = percent * this.getDuration();
-            
-            this.seekTo(time);
-            this.updateProgressBar(percent);
-        }, { passive: false });
-        
-        wrapper.addEventListener('touchend', () => {
-            this.isDragging = false;
-            this.elements.overlay.classList.remove('active');
+        // ホバー時のオーバーレイ表示を維持
+        this.elements.screen.addEventListener('mouseenter', () => {
+            // CSS hover handles this
         });
     }
-
-    updateProgressBar(percent) {
-        this.elements.progress.style.width = `${percent * 100}%`;
-        this.elements.thumb.style.left = `${percent * 100}%`;
-    }
-
-    updateThumbnailPreview(time, x, containerWidth) {
-        // サムネイル位置を更新
-        const thumbnail = this.elements.thumbnail;
-        const thumbnailWidth = 160;
+    
+    updatePreview(percent, time) {
+        const preview = this.elements.seekPreview;
+        const wrapper = this.elements.seekWrapper;
+        const rect = wrapper.getBoundingClientRect();
         
-        // 画面端からはみ出ないように調整
-        let left = x;
-        if (left < thumbnailWidth / 2) {
-            left = thumbnailWidth / 2;
-        } else if (left > containerWidth - thumbnailWidth / 2) {
-            left = containerWidth - thumbnailWidth / 2;
-        }
+        // プレビューの位置を更新
+        const previewWidth = 160;
+        const x = percent * rect.width;
+        const clampedX = Math.max(previewWidth / 2, Math.min(rect.width - previewWidth / 2, x));
+        preview.style.left = `${clampedX}px`;
         
-        thumbnail.style.left = `${left}px`;
-        this.elements.thumbnailTime.textContent = this.formatTimeShort(time);
+        // 時間表示を更新
+        this.elements.previewTime.textContent = this.formatTimeShort(time);
         
-        // ローカル動画の場合、サムネイルを生成
-        if (this.type === 'local' && this.elements.video) {
+        // サムネイルプレビューを生成（ローカル動画のみ）
+        if (this.type === 'local' && this.elements.video && this.previewCtx) {
             this.generateThumbnail(time);
-        } else if (this.type === 'youtube' && this.youtubeVideoId) {
-            // YouTubeはサムネイル画像を使用
-            this.showYoutubeThumbnail(time);
         }
     }
-
+    
     generateThumbnail(time) {
-        // 非同期でサムネイルを生成（パフォーマンス最適化）
-        if (this.thumbnailGenerating) return;
-        this.thumbnailGenerating = true;
+        const video = this.elements.video;
+        if (!video || video.readyState < 2) return;
         
-        requestAnimationFrame(() => {
+        // 別のビデオ要素を使用してサムネイルを生成
+        // （メインビデオの再生位置を変えないため）
+        // パフォーマンスのため、シーク中は生成をスキップ
+        if (this.isSeeking) {
+            // 現在のフレームを描画
             try {
-                // 現在の動画からフレームをキャプチャ
-                const video = this.elements.video;
-                if (video.readyState >= 2) {
-                    // 一時的に別の位置に移動せず、現在の再生位置からの相対位置でサムネイルを表示
-                    // 実際のサムネイル生成は重いので、現在のフレームを使用
-                    this.thumbnailCtx.drawImage(video, 0, 0, 160, 90);
-                }
+                this.previewCtx.drawImage(video, 0, 0, 160, 90);
             } catch (e) {
-                // Cross-origin issues等を無視
+                // CORS error等は無視
             }
-            this.thumbnailGenerating = false;
-        });
+        }
     }
-
-    showYoutubeThumbnail(time) {
-        // YouTubeのサムネイルは動的に取得できないため、
-        // ビデオのサムネイル画像を表示
-        if (!this.youtubeVideoId) return;
+    
+    updateSeekbarUI(percent) {
+        // プログレスバーの更新
+        this.elements.seekProgress.style.width = `${percent * 100}%`;
         
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        // YouTubeのサムネイルURL（複数の解像度から選択）
-        img.src = `https://img.youtube.com/vi/${this.youtubeVideoId}/mqdefault.jpg`;
-        
-        img.onload = () => {
-            this.thumbnailCtx.drawImage(img, 0, 0, 160, 90);
-        };
+        // サムの位置更新
+        const wrapper = this.elements.seekWrapper;
+        const rect = wrapper.getBoundingClientRect();
+        this.elements.seekThumb.style.left = `${percent * rect.width}px`;
     }
-
-    throttledTimeUpdate() {
-        const now = Date.now();
-        if (now - this.lastTimeUpdate >= this.timeUpdateThrottle) {
-            this.lastTimeUpdate = now;
-            this.handleTimeUpdate();
+    
+    updateBuffer() {
+        if (!this.isReady || this.type !== 'local') return;
+        
+        const video = this.elements.video;
+        if (video.buffered.length > 0) {
+            const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+            const duration = video.duration;
+            if (duration > 0) {
+                this.elements.seekBuffer.style.width = `${(bufferedEnd / duration) * 100}%`;
+            }
         }
     }
 
@@ -346,7 +301,7 @@ class VideoPlayer {
             { level: 25, label: '5秒単位' },
             { level: 50, label: '1秒単位' },
             { level: 75, label: '100ms単位' },
-            { level: 100, label: 'ミリ秒単位' }
+            { level: 100, label: 'ミリ秒' }
         ];
         
         let label = '1分単位';
@@ -356,6 +311,14 @@ class VideoPlayer {
             }
         }
         this.elements.zoomIndicator.textContent = label;
+    }
+
+    throttledTimeUpdate() {
+        const now = Date.now();
+        if (now - this.lastTimeUpdate >= this.timeUpdateThrottle) {
+            this.lastTimeUpdate = now;
+            this.handleTimeUpdate();
+        }
     }
 
     captureStartTime() {
@@ -463,7 +426,6 @@ class VideoPlayer {
         this.cleanup();
         this.type = 'youtube';
         this.videoUrl = originalUrl;
-        this.youtubeVideoId = videoId;
 
         this.elements.placeholder.style.display = 'none';
         this.elements.video.style.display = 'none';
@@ -511,9 +473,9 @@ class VideoPlayer {
         this.elements.youtubeContainer.style.display = 'block';
         this.startTimeUpdateLoop();
         
-        // 再生時間を表示
+        // 動画の長さを表示
         const duration = this.getDuration();
-        this.elements.durationDisplay.textContent = `/ ${this.formatTimeShort(duration)}`;
+        this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
         
         if (this.startTime > 0) {
             this.seekTo(this.startTime);
@@ -564,9 +526,9 @@ class VideoPlayer {
     handleVideoLoaded() {
         this.isReady = true;
         
-        // 再生時間を表示
+        // 動画の長さを表示
         const duration = this.getDuration();
-        this.elements.durationDisplay.textContent = `/ ${this.formatTimeShort(duration)}`;
+        this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
         
         if (this.startTime > 0) {
             this.seekTo(this.startTime);
@@ -584,10 +546,10 @@ class VideoPlayer {
         this.elements.timeDisplay.textContent = this.formatTime(currentTime);
         this.elements.currentTimeDisplay.textContent = this.formatTimeShort(currentTime);
         
-        // プログレスバー更新（ドラッグ中でなければ）
-        if (duration > 0 && !this.isDragging) {
+        // シークバー更新（ドラッグ中でなければ）
+        if (duration > 0 && !this.isSeeking) {
             const percent = currentTime / duration;
-            this.updateProgressBar(percent);
+            this.updateSeekbarUI(percent);
         }
         
         this.updateVolumeIcon();
@@ -705,18 +667,7 @@ class VideoPlayer {
     frameStep(direction) {
         if (!this.isReady) return;
 
-        // ズームレベルに応じてステップ量を調整
-        let frameTime = 1 / this.frameRate;
-        
-        // ズームレベルが高いほど細かく
-        if (this.zoomLevel >= 75) {
-            frameTime = 0.001; // 1ms
-        } else if (this.zoomLevel >= 50) {
-            frameTime = 0.01; // 10ms
-        } else if (this.zoomLevel >= 25) {
-            frameTime = 0.1; // 100ms
-        }
-        
+        const frameTime = 1 / this.frameRate;
         const currentTime = this.getCurrentTime();
         const newTime = currentTime + (direction * frameTime);
         
@@ -787,10 +738,16 @@ class VideoPlayer {
             this.elements.video.src = '';
         }
 
+        // Reset seekbar UI
+        this.elements.seekProgress.style.width = '0%';
+        this.elements.seekBuffer.style.width = '0%';
+        this.elements.seekThumb.style.left = '0px';
+        this.elements.currentTimeDisplay.textContent = '0:00';
+        this.elements.durationDisplay.textContent = '0:00';
+
         this.isReady = false;
         this.type = null;
         this.videoUrl = null;
-        this.youtubeVideoId = null;
     }
 }
 

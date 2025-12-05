@@ -60,24 +60,28 @@
                             <video id="playerAVideo" class="video-element" style="display: none;"></video>
                             <div id="playerAYoutube" class="youtube-player" style="display: none;"></div>
                             
-                            <!-- Video Overlay with Seekbar -->
-                            <div class="video-overlay" id="playerAOverlay">
-                                <div class="overlay-seekbar-container">
-                                    <!-- Thumbnail Preview -->
-                                    <div class="thumbnail-preview" id="playerAThumbnail">
-                                        <canvas class="thumbnail-canvas" id="playerAThumbnailCanvas" width="160" height="90"></canvas>
-                                        <div class="thumbnail-time" id="playerAThumbnailTime">0:00</div>
-                                    </div>
-                                    <div class="overlay-seekbar-wrapper" id="playerASeekWrapper">
-                                        <div class="overlay-seekbar-track">
-                                            <div class="overlay-seekbar-progress" id="playerAProgress"></div>
+                            <!-- Overlay Seekbar -->
+                            <div class="seekbar-overlay" id="playerASeekOverlay">
+                                <div class="seekbar-wrapper" id="playerASeekWrapper">
+                                    <!-- Preview Thumbnail -->
+                                    <div class="seekbar-preview" id="playerASeekPreview">
+                                        <div class="preview-thumbnail">
+                                            <canvas id="playerAPreviewCanvas"></canvas>
                                         </div>
-                                        <div class="overlay-seekbar-thumb" id="playerAThumb"></div>
+                                        <div class="preview-time" id="playerAPreviewTime">0:00</div>
                                     </div>
+                                    <!-- Track -->
+                                    <div class="seekbar-track">
+                                        <div class="seekbar-buffer" id="playerABuffer"></div>
+                                        <div class="seekbar-progress" id="playerAProgress"></div>
+                                    </div>
+                                    <!-- Thumb -->
+                                    <div class="seekbar-thumb" id="playerAThumb"></div>
                                 </div>
+                                <!-- Time Display -->
                                 <div class="overlay-time">
                                     <span class="overlay-time-current" id="playerACurrentTime">0:00</span>
-                                    <span class="overlay-time-duration" id="playerADuration">/ 0:00</span>
+                                    <span class="overlay-time-duration" id="playerADuration">0:00</span>
                                 </div>
                             </div>
                         </div>
@@ -100,7 +104,7 @@
                             <div class="start-position">
                                 <label>開始位置:</label>
                                 <input type="text" id="playerAStartTime" class="start-position-input" value="0:00" placeholder="0:00">
-                                <button class="btn btn-small btn-ghost" id="playerASetStart" title="開始位置を設定">📍</button>
+                                <button class="btn btn-small btn-ghost" id="playerASetStart" title="現在位置を設定">📍</button>
                             </div>
                             <div class="seekbar-zoom">
                                 <label>精度:</label>
@@ -156,24 +160,28 @@
                             <video id="playerBVideo" class="video-element" style="display: none;"></video>
                             <div id="playerBYoutube" class="youtube-player" style="display: none;"></div>
                             
-                            <!-- Video Overlay with Seekbar -->
-                            <div class="video-overlay" id="playerBOverlay">
-                                <div class="overlay-seekbar-container">
-                                    <!-- Thumbnail Preview -->
-                                    <div class="thumbnail-preview" id="playerBThumbnail">
-                                        <canvas class="thumbnail-canvas" id="playerBThumbnailCanvas" width="160" height="90"></canvas>
-                                        <div class="thumbnail-time" id="playerBThumbnailTime">0:00</div>
-                                    </div>
-                                    <div class="overlay-seekbar-wrapper" id="playerBSeekWrapper">
-                                        <div class="overlay-seekbar-track">
-                                            <div class="overlay-seekbar-progress" id="playerBProgress"></div>
+                            <!-- Overlay Seekbar -->
+                            <div class="seekbar-overlay" id="playerBSeekOverlay">
+                                <div class="seekbar-wrapper" id="playerBSeekWrapper">
+                                    <!-- Preview Thumbnail -->
+                                    <div class="seekbar-preview" id="playerBSeekPreview">
+                                        <div class="preview-thumbnail">
+                                            <canvas id="playerBPreviewCanvas"></canvas>
                                         </div>
-                                        <div class="overlay-seekbar-thumb" id="playerBThumb"></div>
+                                        <div class="preview-time" id="playerBPreviewTime">0:00</div>
                                     </div>
+                                    <!-- Track -->
+                                    <div class="seekbar-track">
+                                        <div class="seekbar-buffer" id="playerBBuffer"></div>
+                                        <div class="seekbar-progress" id="playerBProgress"></div>
+                                    </div>
+                                    <!-- Thumb -->
+                                    <div class="seekbar-thumb" id="playerBThumb"></div>
                                 </div>
+                                <!-- Time Display -->
                                 <div class="overlay-time">
                                     <span class="overlay-time-current" id="playerBCurrentTime">0:00</span>
-                                    <span class="overlay-time-duration" id="playerBDuration">/ 0:00</span>
+                                    <span class="overlay-time-duration" id="playerBDuration">0:00</span>
                                 </div>
                             </div>
                         </div>
@@ -196,7 +204,7 @@
                             <div class="start-position">
                                 <label>開始位置:</label>
                                 <input type="text" id="playerBStartTime" class="start-position-input" value="0:00" placeholder="0:00">
-                                <button class="btn btn-small btn-ghost" id="playerBSetStart" title="開始位置を設定">📍</button>
+                                <button class="btn btn-small btn-ghost" id="playerBSetStart" title="現在位置を設定">📍</button>
                             </div>
                             <div class="seekbar-zoom">
                                 <label>精度:</label>
@@ -366,7 +374,7 @@
                 <p>ONにするとプレイヤーAの操作にBが追従。<br>オフセットで時間差を調整できます。</p>
 
                 <h3>📐 シークバー</h3>
-                <p>動画上のシークバーをドラッグするとサムネイルプレビューが表示されます。精度スライダーで細かさを調整できます。</p>
+                <p>動画上にホバーでシークバーが表示。<br>ドラッグ中はサムネイルプレビューが表示されます。<br>「精度」スライダーで細かさを調整可能。</p>
             </div>
         </div>
     </div>
