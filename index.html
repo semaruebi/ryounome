@@ -19,16 +19,12 @@
                 <span class="logo-subtitle">RTA Analyzer</span>
             </h1>
             
-            <!-- Project Selector -->
-            <div class="project-selector">
-                <select id="projectSelect" class="project-select">
-                    <option value="">プロジェクトを選択...</option>
-                </select>
-                <button class="btn btn-small btn-primary" id="loadProjectBtn" title="プロジェクトを読み込む">📂 読込</button>
-                <button class="btn btn-small btn-secondary" id="newProjectBtn" title="新規プロジェクト">＋ 新規</button>
-                <button class="btn btn-small btn-ghost" id="renameProjectBtn" title="名前変更">✏️</button>
-                <button class="btn btn-small btn-ghost" id="deleteProjectBtn" title="削除">🗑️</button>
-                <button class="btn btn-small btn-ghost" id="reloadProjectBtn" title="現在のプロジェクトを再読込">🔄</button>
+            <!-- Project Controls -->
+            <div class="project-controls">
+                <span class="project-name" id="currentProjectName">新規</span>
+                <button class="btn btn-small btn-primary" id="saveProjectBtn" title="名前を付けて保存">💾 保存</button>
+                <button class="btn btn-small btn-secondary" id="loadProjectBtn" title="保存したプロジェクトを読み込む">📂 読込</button>
+                <button class="btn btn-small btn-ghost" id="newProjectBtn" title="新規作成">✨ 新規</button>
             </div>
             
             <nav class="header-nav">
@@ -387,6 +383,25 @@
         
         <button class="btn btn-icon btn-primary sidebar-toggle" id="mobileSidebarToggle">💬</button>
     </main>
+
+    <!-- Load Project Modal -->
+    <div class="modal" id="loadProjectModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>📂 プロジェクトを読み込む</h2>
+                <button class="btn btn-icon btn-ghost modal-close" id="closeLoadModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="project-list" id="projectList">
+                    <!-- Projects will be listed here -->
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancelLoadBtn">キャンセル</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Help Modal -->
     <div class="modal" id="helpModal">

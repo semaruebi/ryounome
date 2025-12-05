@@ -53,98 +53,213 @@ class App {
     // ==================== Project Management ====================
 
     initProjects() {
-        // Ensure at least one project exists
-        const projects = Storage.getAllProjects();
-        if (projects.length === 0) {
-            Storage.createProject('デフォルト');
-        } else if (!Storage.getCurrentProjectId()) {
-            Storage.setCurrentProject(projects[0].id);
-        }
-
-        this.projectSelect = document.getElementById('projectSelect');
-        this.updateProjectList();
-        this.bindProjectEvents();
+        // Start with no project loaded (fresh state)
+        this.currentProjectId = null;
+        this.currentProjectName = null;
+        this.isModified = false;
         
-        // Load current project data after players are ready
-        // (called from init() after initPlayers())
+        this.projectNameDisplay = document.getElementById('currentProjectName');
+        this.loadProjectModal = document.getElementById('loadProjectModal');
+        this.projectListContainer = document.getElementById('projectList');
+        
+        this.updateProjectNameDisplay();
+        this.bindProjectEvents();
     }
 
-    updateProjectList() {
-        const projects = Storage.getAllProjects();
-        const currentId = Storage.getCurrentProjectId();
-        
-        this.projectSelect.innerHTML = projects.map(p => 
-            `<option value="${p.id}" ${p.id === currentId ? 'selected' : ''}>${p.name}</option>`
-        ).join('');
+    updateProjectNameDisplay() {
+        if (this.projectNameDisplay) {
+            if (this.currentProjectName) {
+                this.projectNameDisplay.textContent = this.currentProjectName + (this.isModified ? ' *' : '');
+            } else {
+                this.projectNameDisplay.textContent = '新規';
+            }
+        }
     }
 
     bindProjectEvents() {
-        // Load project button (not auto-switch on select)
+        // Save project button - save with name
+        document.getElementById('saveProjectBtn')?.addEventListener('click', () => {
+            this.saveProjectWithName();
+        });
+
+        // Load project button - show modal
         document.getElementById('loadProjectBtn')?.addEventListener('click', () => {
-            const selectedId = this.projectSelect?.value;
-            if (selectedId) {
-                this.switchProject(selectedId);
-            } else {
-                Toast.show('プロジェクトを選択してください', 'warning');
-            }
+            this.showLoadProjectModal();
         });
 
-        // Reload current project
-        document.getElementById('reloadProjectBtn')?.addEventListener('click', () => {
-            this.loadCurrentProject();
-            Toast.show('プロジェクトを再読込', 'success');
-        });
-
-        // New project
+        // New project button - clear everything
         document.getElementById('newProjectBtn')?.addEventListener('click', () => {
-            const name = prompt('プロジェクト名を入力:', `Project ${new Date().toLocaleDateString()}`);
-            if (name) {
-                // Save current project first
-                this.saveCurrentProjectState();
-                
-                const project = Storage.createProject(name);
-                this.updateProjectList();
-                Storage.setCurrentProject(project.id);
-                
-                // Clear players to fresh state
-                this.clearAllPlayers();
-                
-                // Reload comments (will be empty for new project)
-                this.commentsController?.loadComments();
-                this.syncController?.loadSettings();
-                
-                Toast.show(`プロジェクト "${name}" を作成`, 'success');
-            }
-        });
-
-        // Rename project
-        document.getElementById('renameProjectBtn')?.addEventListener('click', () => {
-            const project = Storage.getCurrentProject();
-            if (project) {
-                const name = prompt('新しいプロジェクト名:', project.name);
-                if (name && name !== project.name) {
-                    Storage.renameProject(project.id, name);
-                    this.updateProjectList();
-                    Toast.show(`名前を "${name}" に変更`, 'success');
+            if (this.isModified) {
+                if (!confirm('保存されていない変更があります。新規作成しますか？')) {
+                    return;
                 }
             }
+            this.createNewProject();
         });
 
-        // Delete project
-        document.getElementById('deleteProjectBtn')?.addEventListener('click', () => {
-            const projects = Storage.getAllProjects();
-            if (projects.length <= 1) {
-                Toast.show('最後のプロジェクトは削除できません', 'warning');
+        // Modal close buttons
+        document.getElementById('closeLoadModal')?.addEventListener('click', () => {
+            this.hideLoadProjectModal();
+        });
+        document.getElementById('cancelLoadBtn')?.addEventListener('click', () => {
+            this.hideLoadProjectModal();
+        });
+        
+        // Close modal on backdrop click
+        this.loadProjectModal?.querySelector('.modal-backdrop')?.addEventListener('click', () => {
+            this.hideLoadProjectModal();
+        });
+    }
+
+    saveProjectWithName() {
+        // Prompt for project name
+        const defaultName = this.currentProjectName || `RUN-${new Date().toLocaleDateString('ja-JP').replace(/\//g, '')}`;
+        const name = prompt('プロジェクト名を入力:', defaultName);
+        
+        if (!name) return;
+        
+        // Check if name already exists
+        const projects = Storage.getAllProjects();
+        const existing = projects.find(p => p.name === name);
+        
+        if (existing && existing.id !== this.currentProjectId) {
+            if (!confirm(`"${name}" は既に存在します。上書きしますか？`)) {
                 return;
             }
-            const project = Storage.getCurrentProject();
-            if (project && confirm(`プロジェクト "${project.name}" を削除しますか？`)) {
-                Storage.deleteProject(project.id);
-                this.updateProjectList();
-                this.loadCurrentProject();
-                Toast.show('プロジェクトを削除', 'success');
-            }
+            // Delete existing project
+            Storage.deleteProject(existing.id);
+        }
+        
+        // Create or update project
+        let project;
+        if (this.currentProjectId && this.currentProjectName === name) {
+            // Update existing
+            project = Storage.getCurrentProject();
+        } else {
+            // Create new
+            project = Storage.createProject(name);
+        }
+        
+        this.currentProjectId = project.id;
+        this.currentProjectName = name;
+        Storage.setCurrentProject(project.id);
+        
+        // Save all current state
+        this.saveCurrentProjectState();
+        
+        // Save comments
+        if (this.commentsController) {
+            Storage.saveComments(this.commentsController.comments);
+        }
+        
+        // Save sync settings
+        if (this.syncController) {
+            this.syncController.saveSettings();
+        }
+        
+        this.isModified = false;
+        this.updateProjectNameDisplay();
+        Toast.show(`"${name}" を保存しました`, 'success');
+    }
+
+    showLoadProjectModal() {
+        const projects = Storage.getAllProjects();
+        
+        if (projects.length === 0) {
+            Toast.show('保存されたプロジェクトはありません', 'info');
+            return;
+        }
+        
+        // Build project list
+        this.projectListContainer.innerHTML = projects.map(p => `
+            <div class="project-item" data-id="${p.id}">
+                <div class="project-item-info">
+                    <span class="project-item-name">${p.name}</span>
+                    <span class="project-item-date">${new Date(p.updatedAt || p.createdAt).toLocaleDateString('ja-JP')}</span>
+                </div>
+                <div class="project-item-actions">
+                    <button class="btn btn-small btn-primary load-btn" data-id="${p.id}">読込</button>
+                    <button class="btn btn-small btn-ghost delete-btn" data-id="${p.id}" title="削除">🗑️</button>
+                </div>
+            </div>
+        `).join('');
+        
+        // Bind load buttons
+        this.projectListContainer.querySelectorAll('.load-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const projectId = e.target.dataset.id;
+                this.loadProject(projectId);
+                this.hideLoadProjectModal();
+            });
         });
+        
+        // Bind delete buttons
+        this.projectListContainer.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const projectId = e.target.dataset.id;
+                const project = projects.find(p => p.id === projectId);
+                if (project && confirm(`"${project.name}" を削除しますか？`)) {
+                    Storage.deleteProject(projectId);
+                    this.showLoadProjectModal(); // Refresh list
+                    Toast.show('削除しました', 'success');
+                }
+            });
+        });
+        
+        this.loadProjectModal.classList.add('open');
+    }
+
+    hideLoadProjectModal() {
+        this.loadProjectModal?.classList.remove('open');
+    }
+
+    loadProject(projectId) {
+        if (this.isModified) {
+            if (!confirm('保存されていない変更があります。読み込みますか？')) {
+                return;
+            }
+        }
+        
+        Storage.setCurrentProject(projectId);
+        const project = Storage.getCurrentProject();
+        
+        this.currentProjectId = projectId;
+        this.currentProjectName = project.name;
+        this.isModified = false;
+        
+        this.loadCurrentProject();
+        this.updateProjectNameDisplay();
+        Toast.show(`"${project.name}" を読み込みました`, 'success');
+    }
+
+    createNewProject() {
+        // Clear everything to fresh state
+        this.currentProjectId = null;
+        this.currentProjectName = null;
+        this.isModified = false;
+        
+        // Clear players
+        this.clearAllPlayers();
+        
+        // Clear comments
+        if (this.commentsController) {
+            this.commentsController.comments = [];
+            this.commentsController.render();
+        }
+        
+        // Reset sync settings
+        if (this.syncController) {
+            this.syncController.reset();
+        }
+        
+        this.updateProjectNameDisplay();
+        Toast.show('新規プロジェクトを作成', 'success');
+    }
+
+    markAsModified() {
+        this.isModified = true;
+        this.updateProjectNameDisplay();
     }
 
     switchProject(projectId) {

@@ -283,6 +283,28 @@ class SyncController {
         });
     }
 
+    reset() {
+        // Reset to default state
+        this.enabled = false;
+        this.masterKey = 'A';
+        this.loopMode = 'loop';
+        this.playerAReachedEnd = false;
+        this.playerBReachedEnd = false;
+        
+        // Reset UI
+        this.elements.syncToggle?.classList.remove('active');
+        if (this.elements.syncStatus) this.elements.syncStatus.textContent = 'OFF';
+        if (this.elements.playerAStartPos) this.elements.playerAStartPos.value = '0:00';
+        if (this.elements.playerBStartPos) this.elements.playerBStartPos.value = '0:00';
+        
+        // Reset loop mode buttons
+        this.elements.loopModeLoop?.classList.add('active');
+        this.elements.loopModeContinue?.classList.remove('active');
+        this.elements.loopModeStop?.classList.remove('active');
+        
+        this.updateMasterUI();
+    }
+
     toggle() {
         if (this.enabled) {
             this.disable();
