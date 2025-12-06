@@ -14,7 +14,7 @@
     <header class="header">
         <div class="header-content">
             <h1 class="logo">
-                <span class="logo-icon">👁️</span>
+                <span class="logo-icon">👀</span>
                 <span class="logo-text">RyounoMe</span>
                 <span class="logo-subtitle">RTA Analyzer</span>
             </h1>
@@ -89,11 +89,6 @@
                         <!-- Info -->
                         <div class="timeline-info">
                             <span class="timeline-time timeline-time-current" id="playerACurrentTime">0:00</span>
-                            <div class="precision-control">
-                                <span class="precision-label">精度:</span>
-                                <input type="range" class="precision-slider" id="playerAPrecision" min="1" max="100" value="50">
-                                <span class="precision-value" id="playerAPrecisionValue">1秒</span>
-                            </div>
                             <span class="timeline-time" id="playerADuration">0:00</span>
                         </div>
                     </div>
@@ -124,7 +119,7 @@
                             <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="-10f">-10f</button>
                             <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="-1f">-1f</button>
                             <button class="btn btn-icon btn-large btn-primary" id="playerAPlayPause">
-                                <span class="play-icon">▶️</span>
+                                <span class="play-icon">▶</span>
                             </button>
                             <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="+1f">+1f</button>
                             <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="+10f">+10f</button>
@@ -137,13 +132,13 @@
                         <!-- Frame Markers -->
                         <div class="control-row marker-controls">
                             <div class="marker-group marker-start">
-                                <button class="btn btn-marker btn-marker-start" id="playerASetStart">📍 Start</button>
+                                <button class="btn btn-marker btn-marker-start" id="playerASetStart"> Start</button>
                                 <span class="marker-value" id="playerAStartValue">--:--:--</span>
                                 <button class="btn btn-small btn-ghost" id="playerAGoStart" data-tooltip="この位置へ移動">↩</button>
                                 <button class="btn btn-small btn-ghost" id="playerAClearStart" data-tooltip="クリア">✕</button>
                             </div>
                             <div class="marker-group marker-end">
-                                <button class="btn btn-marker btn-marker-end" id="playerASetEnd">🏁 End</button>
+                                <button class="btn btn-marker btn-marker-end" id="playerASetEnd"> End</button>
                                 <span class="marker-value" id="playerAEndValue">--:--:--</span>
                                 <button class="btn btn-small btn-ghost" id="playerAGoEnd" data-tooltip="この位置へ移動">↩</button>
                                 <button class="btn btn-small btn-ghost" id="playerAClearEnd" data-tooltip="クリア">✕</button>
@@ -170,6 +165,11 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Resizer Handle -->
+                <div class="players-resizer" id="playersResizer">
+                    <div class="resizer-handle"></div>
                 </div>
 
                 <!-- Player B -->
@@ -216,11 +216,6 @@
                         </div>
                         <div class="timeline-info">
                             <span class="timeline-time timeline-time-current" id="playerBCurrentTime">0:00</span>
-                            <div class="precision-control">
-                                <span class="precision-label">精度:</span>
-                                <input type="range" class="precision-slider" id="playerBPrecision" min="1" max="100" value="50">
-                                <span class="precision-value" id="playerBPrecisionValue">1秒</span>
-                            </div>
                             <span class="timeline-time" id="playerBDuration">0:00</span>
                         </div>
                     </div>
@@ -250,7 +245,7 @@
                             <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="-10f">-10f</button>
                             <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="-1f">-1f</button>
                             <button class="btn btn-icon btn-large btn-primary" id="playerBPlayPause">
-                                <span class="play-icon">▶️</span>
+                                <span class="play-icon">▶</span>
                             </button>
                             <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="+1f">+1f</button>
                             <button class="btn btn-small btn-ghost step-btn frame-btn" data-step="+10f">+10f</button>
@@ -263,13 +258,13 @@
                         <!-- Frame Markers -->
                         <div class="control-row marker-controls">
                             <div class="marker-group marker-start">
-                                <button class="btn btn-marker btn-marker-start" id="playerBSetStart">📍 Start</button>
+                                <button class="btn btn-marker btn-marker-start" id="playerBSetStart">Start</button>
                                 <span class="marker-value" id="playerBStartValue">--:--:--</span>
                                 <button class="btn btn-small btn-ghost" id="playerBGoStart" data-tooltip="この位置へ移動">↩</button>
                                 <button class="btn btn-small btn-ghost" id="playerBClearStart" data-tooltip="クリア">✕</button>
                             </div>
                             <div class="marker-group marker-end">
-                                <button class="btn btn-marker btn-marker-end" id="playerBSetEnd">🏁 End</button>
+                                <button class="btn btn-marker btn-marker-end" id="playerBSetEnd">End</button>
                                 <span class="marker-value" id="playerBEndValue">--:--:--</span>
                                 <button class="btn btn-small btn-ghost" id="playerBGoEnd" data-tooltip="この位置へ移動">↩</button>
                                 <button class="btn btn-small btn-ghost" id="playerBClearEnd" data-tooltip="クリア">✕</button>
@@ -299,19 +294,9 @@
                 </div>
             </section>
 
-            <!-- Sync Panel -->
+            <!-- Control Panel -->
             <section class="sync-panel">
                 <div class="sync-panel-content">
-                    <button class="btn btn-sync" id="syncToggle">
-                        🔗 同期 <span class="sync-status" id="syncStatus">OFF</span>
-                    </button>
-                    <div class="sync-master">
-                        <span class="offset-label">基準</span>
-                        <div class="master-buttons">
-                            <button class="btn btn-master active" id="masterA" data-master="A">A</button>
-                            <button class="btn btn-master" id="masterB" data-master="B">B</button>
-                        </div>
-                    </div>
                     <div class="sync-startpos">
                         <div class="startpos-group">
                             <span class="startpos-label">A開始</span>
@@ -329,9 +314,9 @@
                     </div>
                     <div class="loop-mode-toggle">
                         <span class="loop-label">End到達時:</span>
-                        <button class="btn btn-small loop-btn active" id="loopModeLoop" data-mode="loop">🔁 ループ</button>
+                        <button class="btn btn-small loop-btn" id="loopModeLoop" data-mode="loop">∞ ループ</button>
                         <button class="btn btn-small loop-btn" id="loopModeContinue" data-mode="continue">▶ 継続</button>
-                        <button class="btn btn-small loop-btn" id="loopModeStop" data-mode="stop">⏹ 停止</button>
+                        <button class="btn btn-small loop-btn active" id="loopModeStop" data-mode="stop">⏹ 停止</button>
                     </div>
                 </div>
             </section>
@@ -339,6 +324,9 @@
 
         <!-- Sidebar -->
         <aside class="sidebar" id="commentsSidebar">
+            <div class="sidebar-resizer" id="sidebarResizer">
+                <div class="sidebar-resizer-handle"></div>
+            </div>
             <div class="sidebar-header">
                 <h2 class="sidebar-title">💬 コメント</h2>
                 <button class="btn btn-icon btn-ghost btn-small" id="clearCommentsBtn">🗑️</button>
@@ -360,8 +348,8 @@
                         <button class="btn btn-icon btn-ghost btn-small" id="captureTimestampBtn">📍</button>
                     </div>
                 </div>
-                <textarea id="commentInput" class="comment-textarea" placeholder="Ctrl+Enter で投稿"></textarea>
-                <button class="btn btn-primary" id="postCommentBtn" style="width:100%;margin-top:6px;">投稿</button>
+                <textarea id="commentInput" class="comment-textarea" placeholder="メモ（空でもOK）"></textarea>
+                <button class="btn btn-primary" id="postCommentBtn" style="width:100%;margin-top:6px;">📍 マーク追加</button>
             </div>
             <div class="comments-filter">
                 <select id="commentsFilter" class="filter-select">
@@ -399,32 +387,144 @@
         </div>
     </div>
 
+    <!-- Local File Load Modal -->
+    <div class="modal" id="localFileModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>📂 ローカルファイルを読み込みます</h2>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    セキュリティ上、ユーザーのファイルに直接アクセスできないため、<br>
+                    クリップボードにパスをコピーしました。
+                </p>
+                <div class="file-path-display" id="localFilePathDisplay">
+                    <!-- File path will be shown here -->
+                </div>
+                <p class="modal-hint">
+                    📋 <strong>Ctrl+V → Enter</strong> で保存した動画を選択してください
+                </p>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" id="localFileSelectBtn">OK - ファイルを選択</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Help Modal -->
     <div class="modal" id="helpModal">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
             <div class="modal-header">
-                <h2>ヘルプ</h2>
+                <h2>❓ ヘルプ</h2>
                 <button class="btn btn-icon btn-ghost modal-close" id="closeHelpModal">✕</button>
             </div>
             <div class="modal-body">
-                <h3>⌨️ ショートカット (VidTimer風)</h3>
+                <h3>⌨️ キーボードショートカット</h3>
                 <table class="shortcut-table">
-                    <tr><td><kbd>Space</kbd></td><td>再生/停止</td></tr>
+                    <tr><td><kbd>Space</kbd></td><td>再生/停止（プレイヤーA）</td></tr>
                     <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>±1フレーム</td></tr>
                     <tr><td><kbd>Shift</kbd>+<kbd>,</kbd><kbd>.</kbd></td><td>±5フレーム</td></tr>
                     <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>±1秒</td></tr>
-                    <tr><td><kbd>Shift</kbd>+<kbd>←→</kbd></td><td>±5秒</td></tr>
-                    <tr><td><kbd>S</kbd></td><td>同期 ON/OFF</td></tr>
+                    <tr><td><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd></td><td>±5秒</td></tr>
                     <tr><td><kbd>R</kbd></td><td>開始位置に戻る</td></tr>
+                    <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>マーク追加</td></tr>
                 </table>
-                <h3>📐 ステップボタン</h3>
-                <p>-1m,-30s,-10s,-5s,-1s,-10f,-1f / +1f,+10f,+1s,+5s,+10s,+30s,+1m<br>
-                FPS設定で30fps/60fpsを選択可能。</p>
-                <h3>📍 フレームマーカー</h3>
-                <p><strong>Set Start</strong>: 現在位置をスタートフレームとして設定<br>
-                <strong>Set End</strong>: 現在位置をエンドフレームとして設定<br>
-                <strong>区間</strong>: Start〜End間の時間とフレーム数を表示</p>
+                
+                <h3>🎬 プレイヤー操作</h3>
+                <p>
+                    <strong>ステップボタン</strong>: ±1m, ±30s, ±10s, ±5s, ±1s, ±10f, ±1f<br>
+                    <strong>FPS設定</strong>: 30fps/60fpsを選択可能<br>
+                    <strong>プレイヤーサイズ</strong>: 中央のハンドルをドラッグで調整
+                </p>
+                
+                <h3>📍 マーカー機能</h3>
+                <p>
+                    <strong>START</strong>: 現在位置をスタートに設定<br>
+                    <strong>END</strong>: 現在位置をエンドに設定<br>
+                    <strong>区間</strong>: Start〜End間の時間とフレーム数を表示
+                </p>
+                
+                <h3>💬 コメント機能</h3>
+                <p>
+                    <strong>マーク追加</strong>: 両プレイヤーの現在時刻を記録（空でもOK）<br>
+                    <strong>Markdown対応</strong>: **太字**, *斜体*, `コード`, ~~取消~~<br>
+                    <strong>クリック</strong>: そのタイミングに両プレイヤーがジャンプ<br>
+                    <strong>サイドバー幅</strong>: 左端をドラッグで調整
+                </p>
+                
+                <h3>💾 プロジェクト管理</h3>
+                <p>
+                    <strong>保存</strong>: 現在の設定を名前付きで保存<br>
+                    <strong>読込</strong>: 保存したプロジェクトを復元<br>
+                    <strong>新規</strong>: まっさらな状態で開始<br>
+                    データはブラウザのlocalStorageに保存されます
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Comment Modal -->
+    <div class="modal" id="editCommentModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2>✏️ コメントを編集</h2>
+                <button class="btn btn-icon btn-ghost modal-close" id="closeEditCommentModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">メモ</label>
+                    <textarea id="editCommentText" class="form-textarea" rows="6" placeholder="メモを入力...（Markdown対応: **太字**, *斜体*, - リスト）"></textarea>
+                </div>
+                <p class="form-hint">💡 改行はそのまま反映されます。**太字**、*斜体*、`コード`が使えます。</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelEditComment">キャンセル</button>
+                <button class="btn btn-primary" id="saveEditComment">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Project Modal -->
+    <div class="modal" id="saveProjectModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>💾 プロジェクトを保存</h2>
+                <button class="btn btn-icon btn-ghost modal-close" id="closeSaveProjectModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">プロジェクト名</label>
+                    <input type="text" id="saveProjectName" class="form-input" placeholder="プロジェクト名を入力...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelSaveProject">キャンセル</button>
+                <button class="btn btn-primary" id="confirmSaveProject">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Modal (General Purpose) -->
+    <div class="modal" id="promptModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="promptModalTitle">入力</h2>
+                <button class="btn btn-icon btn-ghost modal-close" id="closePromptModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" id="promptModalLabel">値を入力</label>
+                    <input type="text" id="promptModalInput" class="form-input">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelPromptModal">キャンセル</button>
+                <button class="btn btn-primary" id="confirmPromptModal">OK</button>
             </div>
         </div>
     </div>

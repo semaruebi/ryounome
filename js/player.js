@@ -14,7 +14,6 @@ class VideoPlayer {
         this.frameRate = 60; // Default 60fps
         this.startTime = 0;
         this.isSeeking = false;
-        this.precision = 50;
         
         // Frame markers
         this.startMarker = null; // Start frame time in seconds
@@ -91,9 +90,7 @@ class VideoPlayer {
             seekBuffer: document.getElementById(`${p}Buffer`),
             seekThumb: document.getElementById(`${p}Thumb`),
             currentTimeDisplay: document.getElementById(`${p}CurrentTime`),
-            durationDisplay: document.getElementById(`${p}Duration`),
-            precisionSlider: document.getElementById(`${p}Precision`),
-            precisionValue: document.getElementById(`${p}PrecisionValue`)
+            durationDisplay: document.getElementById(`${p}Duration`)
         };
         
         if (this.elements.previewCanvas) {
@@ -166,12 +163,6 @@ class VideoPlayer {
             this.setPlaybackRate(parseFloat(e.target.value));
         });
 
-        // Precision slider
-        this.elements.precisionSlider?.addEventListener('input', (e) => {
-            this.precision = parseInt(e.target.value);
-            this.updatePrecisionDisplay();
-        });
-        this.updatePrecisionDisplay();
 
         // Seekbar & Thumbnail strip
         this.setupSeekbar();
@@ -200,28 +191,6 @@ class VideoPlayer {
         this.elements.screen?.addEventListener('click', (e) => {
             if (!e.target.closest('.timeline-container')) this.togglePlayPause();
         });
-    }
-
-    updatePrecisionDisplay() {
-        if (!this.elements.precisionValue) return;
-        
-        let label;
-        if (this.precision <= 10) label = '1分';
-        else if (this.precision <= 25) label = '10秒';
-        else if (this.precision <= 50) label = '1秒';
-        else if (this.precision <= 75) label = '100ms';
-        else label = 'フレーム';
-        
-        this.elements.precisionValue.textContent = label;
-    }
-
-    getSeekStep() {
-        // Based on precision, return step in percentage
-        if (this.precision <= 10) return 1; // 1%
-        if (this.precision <= 25) return 0.1;
-        if (this.precision <= 50) return 0.01;
-        if (this.precision <= 75) return 0.001;
-        return 0.0001; // Frame level
     }
 
     setupStepButtons() {
@@ -672,11 +641,52 @@ class VideoPlayer {
             return;
         }
 
+        // Check if it's a YouTube URL
         const videoId = this.extractYoutubeId(url);
         if (videoId) {
             this.loadYoutubeVideo(videoId, url);
+            return;
+        }
+        
+        // Check if it's a local file path (Windows or Unix)
+        if (this.isLocalPath(url)) {
+            this.loadFromLocalPath(url);
+            return;
+        }
+        
+        Toast.show('無効なURL', 'error');
+    }
+    
+    isLocalPath(path) {
+        // Windows: C:\path or D:\path etc.
+        // Unix: /path/to/file
+        return /^[A-Za-z]:[\\\/]/.test(path) || path.startsWith('/');
+    }
+    
+    async loadFromLocalPath(filePath) {
+        this.type = 'local';
+        this.videoUrl = filePath;
+        this.localFilePath = filePath;
+        
+        // Save to project
+        Storage.savePlayerData(this.key, {
+            source: filePath,
+            sourceType: 'local'
+        });
+        
+        // Show modal through app (if available)
+        if (window.app && window.app.showLocalFileModal) {
+            window.app.showLocalFileModal(filePath, this);
         } else {
-            Toast.show('無効なURL', 'error');
+            // Fallback: copy to clipboard and open file picker
+            const fileName = filePath.split(/[\\\/]/).pop();
+            try {
+                await navigator.clipboard.writeText(filePath);
+                Toast.show(`📋 パスをコピーしました！Ctrl+V → Enter で選択`, 'success', 4000);
+            } catch (err) {
+                Toast.show(`"${fileName}" を選択してください`, 'info', 3000);
+            }
+            setTimeout(() => this.openFilePicker(), 300);
         }
     }
 
@@ -952,7 +962,7 @@ class VideoPlayer {
 
     handleStateChange(state) {
         const icon = this.elements.playPauseBtn?.querySelector('.play-icon');
-        if (icon) icon.textContent = state === 'playing' ? '⏸️' : '▶️';
+        if (icon) icon.textContent = state === 'playing' ? '⏸' : '▶';
         this.onStateChange(state, this);
     }
 

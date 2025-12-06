@@ -44,6 +44,7 @@ class App {
         this.loadCurrentProject(); // Load project data after everything is ready
         this.initUI();
         this.initSidebar();
+        this.initResizer();
         this.bindKeyboardShortcuts();
         
         console.log('RyounoMe initialized');
@@ -61,6 +62,11 @@ class App {
         this.projectNameDisplay = document.getElementById('currentProjectName');
         this.loadProjectModal = document.getElementById('loadProjectModal');
         this.projectListContainer = document.getElementById('projectList');
+        
+        // Local file modal elements
+        this.localFileModal = document.getElementById('localFileModal');
+        this.localFilePathDisplay = document.getElementById('localFilePathDisplay');
+        this.pendingLocalFiles = []; // Queue of local files to load
         
         this.updateProjectNameDisplay();
         this.bindProjectEvents();
@@ -109,13 +115,72 @@ class App {
         this.loadProjectModal?.querySelector('.modal-backdrop')?.addEventListener('click', () => {
             this.hideLoadProjectModal();
         });
+        
+        // Local file modal - OK button
+        document.getElementById('localFileSelectBtn')?.addEventListener('click', () => {
+            this.processNextLocalFile();
+        });
+        
+        // Local file modal - backdrop click
+        this.localFileModal?.querySelector('.modal-backdrop')?.addEventListener('click', () => {
+            this.hideLocalFileModal();
+        });
+        
+        // Save project modal events
+        document.getElementById('confirmSaveProject')?.addEventListener('click', () => {
+            const input = document.getElementById('saveProjectName');
+            const name = input?.value.trim();
+            if (name) {
+                this.doSaveProject(name);
+                document.getElementById('saveProjectModal')?.classList.remove('open');
+            }
+        });
+        document.getElementById('cancelSaveProject')?.addEventListener('click', () => {
+            document.getElementById('saveProjectModal')?.classList.remove('open');
+        });
+        document.getElementById('closeSaveProjectModal')?.addEventListener('click', () => {
+            document.getElementById('saveProjectModal')?.classList.remove('open');
+        });
+        document.getElementById('saveProjectModal')?.querySelector('.modal-backdrop')?.addEventListener('click', () => {
+            document.getElementById('saveProjectModal')?.classList.remove('open');
+        });
+        
+        // Enter to save
+        document.getElementById('saveProjectName')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const name = e.target.value.trim();
+                if (name) {
+                    this.doSaveProject(name);
+                    document.getElementById('saveProjectModal')?.classList.remove('open');
+                }
+            }
+        });
     }
 
     saveProjectWithName() {
-        // Prompt for project name
+        const modal = document.getElementById('saveProjectModal');
+        const input = document.getElementById('saveProjectName');
+        
+        if (!modal || !input) {
+            // Fallback to prompt
+            this.saveProjectWithPrompt();
+            return;
+        }
+        
+        const defaultName = this.currentProjectName || `RUN-${new Date().toLocaleDateString('ja-JP').replace(/\//g, '')}`;
+        input.value = defaultName;
+        modal.classList.add('open');
+        input.focus();
+        input.select();
+    }
+    
+    saveProjectWithPrompt() {
         const defaultName = this.currentProjectName || `RUN-${new Date().toLocaleDateString('ja-JP').replace(/\//g, '')}`;
         const name = prompt('プロジェクト名を入力:', defaultName);
-        
+        if (name) this.doSaveProject(name);
+    }
+    
+    doSaveProject(name) {
         if (!name) return;
         
         // Check if name already exists
@@ -126,17 +191,14 @@ class App {
             if (!confirm(`"${name}" は既に存在します。上書きしますか？`)) {
                 return;
             }
-            // Delete existing project
             Storage.deleteProject(existing.id);
         }
         
         // Create or update project
         let project;
         if (this.currentProjectId && this.currentProjectName === name) {
-            // Update existing
             project = Storage.getCurrentProject();
         } else {
-            // Create new
             project = Storage.createProject(name);
         }
         
@@ -212,6 +274,64 @@ class App {
 
     hideLoadProjectModal() {
         this.loadProjectModal?.classList.remove('open');
+    }
+
+    // Local file modal methods
+    async showLocalFileModal(filePath, player) {
+        // Add to queue
+        this.pendingLocalFiles.push({ filePath, player });
+        
+        // If modal not already showing, show it
+        if (!this.localFileModal.classList.contains('open')) {
+            await this.displayNextLocalFile();
+        }
+    }
+    
+    async displayNextLocalFile() {
+        if (this.pendingLocalFiles.length === 0) {
+            this.hideLocalFileModal();
+            return;
+        }
+        
+        const { filePath } = this.pendingLocalFiles[0];
+        
+        // Copy path to clipboard
+        try {
+            await navigator.clipboard.writeText(filePath);
+        } catch (err) {
+            console.error('Clipboard write failed:', err);
+        }
+        
+        // Show path in modal
+        this.localFilePathDisplay.textContent = filePath;
+        this.localFileModal.classList.add('open');
+    }
+    
+    hideLocalFileModal() {
+        this.localFileModal?.classList.remove('open');
+        this.pendingLocalFiles = [];
+    }
+    
+    processNextLocalFile() {
+        if (this.pendingLocalFiles.length === 0) {
+            this.hideLocalFileModal();
+            return;
+        }
+        
+        const { player } = this.pendingLocalFiles.shift();
+        
+        // Hide modal first
+        this.localFileModal.classList.remove('open');
+        
+        // Open file picker
+        player.openFilePicker();
+        
+        // Show next file if any (with delay)
+        if (this.pendingLocalFiles.length > 0) {
+            setTimeout(() => {
+                this.displayNextLocalFile();
+            }, 1000);
+        }
     }
 
     loadProject(projectId) {
@@ -323,7 +443,7 @@ class App {
         const inputFolder = prompt(
             `プレイヤー${playerKey} の動画フォルダを入力してください:\n` +
             `ファイル名: ${fileName}\n` +
-            `（例: E:\\Videos）`,
+            `（例: D:\\Videos）`,
             lastFolder
         );
         
@@ -389,6 +509,9 @@ class App {
         console.log('loadCurrentProject:', project);
         if (!project) return;
 
+        // Collect local files to load
+        const localFilesToLoad = [];
+
         // Load player A
         const playerAData = project.playerA;
         console.log('playerAData:', playerAData);
@@ -400,16 +523,14 @@ class App {
             
             if (playerAData.source) {
                 this.playerA.elements.urlInput.value = playerAData.source;
+                this.playerA.localFilePath = playerAData.source;
                 
                 if (playerAData.sourceType === 'youtube') {
                     // Auto-load YouTube
                     this.playerA.loadFromUrl();
                 } else if (playerAData.sourceType === 'local') {
-                    // Restore stored path
-                    this.playerA.localFilePath = playerAData.source;
-                    // Show hint - user needs to click "選択" button
-                    const fileName = playerAData.source.split(/[\\\/]/).pop();
-                    Toast.show(`A: 「📂 選択」をクリックして "${fileName}" を選択`, 'info', 5000);
+                    // Queue for local file modal
+                    localFilesToLoad.push({ filePath: playerAData.source, player: this.playerA });
                 }
             }
         }
@@ -425,22 +546,26 @@ class App {
             
             if (playerBData.source) {
                 this.playerB.elements.urlInput.value = playerBData.source;
+                this.playerB.localFilePath = playerBData.source;
                 
                 if (playerBData.sourceType === 'youtube') {
-                    // Auto-load YouTube (with delay to avoid API issues)
+                    // Auto-load YouTube (with delay)
                     setTimeout(() => {
                         this.playerB.loadFromUrl();
                     }, 500);
                 } else if (playerBData.sourceType === 'local') {
-                    // Restore stored path
-                    this.playerB.localFilePath = playerBData.source;
-                    // Show hint - user needs to click "選択" button
-                    const fileName = playerBData.source.split(/[\\\/]/).pop();
-                    setTimeout(() => {
-                        Toast.show(`B: 「📂 選択」をクリックして "${fileName}" を選択`, 'info', 5000);
-                    }, 500);
+                    // Queue for local file modal
+                    localFilesToLoad.push({ filePath: playerBData.source, player: this.playerB });
                 }
             }
+        }
+        
+        // Show local file modal if there are local files to load
+        if (localFilesToLoad.length > 0) {
+            this.pendingLocalFiles = localFilesToLoad;
+            setTimeout(() => {
+                this.displayNextLocalFile();
+            }, 300);
         }
 
         // Load start positions to sync panel
@@ -477,9 +602,7 @@ class App {
     }
 
     initSync() {
-        this.syncController = new SyncController(this.playerA, this.playerB, {
-            onSyncStateChange: (enabled) => console.log('Sync:', enabled)
-        });
+        this.syncController = new SyncController(this.playerA, this.playerB);
     }
 
     initComments() {
@@ -556,6 +679,178 @@ class App {
                 this.sidebarOpen = true;
             }
         });
+        
+        // Sidebar resizer
+        this.initSidebarResizer();
+    }
+    
+    initSidebarResizer() {
+        const resizer = document.getElementById('sidebarResizer');
+        const sidebar = document.getElementById('commentsSidebar');
+        
+        if (!resizer || !sidebar) return;
+        
+        let isResizing = false;
+        let startX, startWidth;
+        
+        const startResize = (e) => {
+            isResizing = true;
+            resizer.classList.add('dragging');
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+            
+            startX = e.touches ? e.touches[0].clientX : e.clientX;
+            startWidth = sidebar.offsetWidth;
+            
+            e.preventDefault();
+        };
+        
+        const doResize = (e) => {
+            if (!isResizing) return;
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const deltaX = startX - clientX; // Inverted because sidebar is on the right
+            
+            let newWidth = startWidth + deltaX;
+            
+            // Constraints
+            newWidth = Math.max(250, Math.min(600, newWidth));
+            
+            sidebar.style.width = `${newWidth}px`;
+        };
+        
+        const stopResize = () => {
+            if (!isResizing) return;
+            isResizing = false;
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            
+            // Save width
+            localStorage.setItem('ryounome-sidebar-width', sidebar.offsetWidth);
+        };
+        
+        resizer.addEventListener('mousedown', startResize);
+        document.addEventListener('mousemove', doResize);
+        document.addEventListener('mouseup', stopResize);
+        
+        resizer.addEventListener('touchstart', startResize, { passive: false });
+        document.addEventListener('touchmove', doResize, { passive: false });
+        document.addEventListener('touchend', stopResize);
+        
+        // Restore saved width
+        const savedWidth = localStorage.getItem('ryounome-sidebar-width');
+        if (savedWidth) {
+            sidebar.style.width = `${savedWidth}px`;
+        }
+        
+        // Double-click to reset
+        resizer.addEventListener('dblclick', () => {
+            sidebar.style.width = '';
+            localStorage.removeItem('ryounome-sidebar-width');
+            Toast.show('サイドバー幅をリセット', 'info');
+        });
+    }
+
+    initResizer() {
+        const resizer = document.getElementById('playersResizer');
+        const playerA = document.getElementById('playerAContainer');
+        const playerB = document.getElementById('playerBContainer');
+        const playersSection = document.querySelector('.players-section');
+        
+        if (!resizer || !playerA || !playerB || !playersSection) return;
+        
+        let isResizing = false;
+        let startX, startY;
+        let startWidthA, startWidthB;
+        
+        const startResize = (e) => {
+            isResizing = true;
+            resizer.classList.add('dragging');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            
+            // Get starting position
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            startX = clientX;
+            
+            // Get current widths
+            const rectA = playerA.getBoundingClientRect();
+            const rectB = playerB.getBoundingClientRect();
+            startWidthA = rectA.width;
+            startWidthB = rectB.width;
+            
+            e.preventDefault();
+        };
+        
+        const doResize = (e) => {
+            if (!isResizing) return;
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const deltaX = clientX - startX;
+            
+            const totalWidth = startWidthA + startWidthB;
+            let newWidthA = startWidthA + deltaX;
+            let newWidthB = startWidthB - deltaX;
+            
+            // Minimum width constraint
+            const minWidth = 250;
+            if (newWidthA < minWidth) {
+                newWidthA = minWidth;
+                newWidthB = totalWidth - minWidth;
+            }
+            if (newWidthB < minWidth) {
+                newWidthB = minWidth;
+                newWidthA = totalWidth - minWidth;
+            }
+            
+            // Set flex basis as percentage
+            const percentA = (newWidthA / totalWidth) * 100;
+            const percentB = (newWidthB / totalWidth) * 100;
+            
+            playerA.style.flex = `0 0 ${percentA}%`;
+            playerB.style.flex = `0 0 ${percentB}%`;
+        };
+        
+        const stopResize = () => {
+            if (!isResizing) return;
+            isResizing = false;
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            
+            // Save ratio to localStorage
+            const rectA = playerA.getBoundingClientRect();
+            const rectB = playerB.getBoundingClientRect();
+            const ratio = rectA.width / (rectA.width + rectB.width);
+            localStorage.setItem('ryounome-player-ratio', ratio);
+        };
+        
+        // Mouse events
+        resizer.addEventListener('mousedown', startResize);
+        document.addEventListener('mousemove', doResize);
+        document.addEventListener('mouseup', stopResize);
+        
+        // Touch events
+        resizer.addEventListener('touchstart', startResize, { passive: false });
+        document.addEventListener('touchmove', doResize, { passive: false });
+        document.addEventListener('touchend', stopResize);
+        
+        // Restore saved ratio
+        const savedRatio = localStorage.getItem('ryounome-player-ratio');
+        if (savedRatio) {
+            const ratio = parseFloat(savedRatio);
+            playerA.style.flex = `0 0 ${ratio * 100}%`;
+            playerB.style.flex = `0 0 ${(1 - ratio) * 100}%`;
+        }
+        
+        // Double-click to reset
+        resizer.addEventListener('dblclick', () => {
+            playerA.style.flex = '1';
+            playerB.style.flex = '1';
+            localStorage.removeItem('ryounome-player-ratio');
+            Toast.show('プレイヤーサイズをリセット', 'info');
+        });
     }
 
     initTheme() {
@@ -611,11 +906,9 @@ class App {
                     if (shift) {
                         // Shift + Left: -5 seconds
                         this.playerA.seekTo(this.playerA.getCurrentTime() - 5);
-                        if (this.syncController.enabled) this.playerB.seekTo(this.playerB.getCurrentTime() - 5);
                     } else {
                         // Left: -1 second
                         this.playerA.seekTo(this.playerA.getCurrentTime() - 1);
-                        if (this.syncController.enabled) this.playerB.seekTo(this.playerB.getCurrentTime() - 1);
                     }
                     break;
                 case 'ArrowRight':
@@ -624,11 +917,9 @@ class App {
                     if (shift) {
                         // Shift + Right: +5 seconds
                         this.playerA.seekTo(this.playerA.getCurrentTime() + 5);
-                        if (this.syncController.enabled) this.playerB.seekTo(this.playerB.getCurrentTime() + 5);
                     } else {
                         // Right: +1 second
                         this.playerA.seekTo(this.playerA.getCurrentTime() + 1);
-                        if (this.syncController.enabled) this.playerB.seekTo(this.playerB.getCurrentTime() + 1);
                     }
                     break;
                     
@@ -636,25 +927,16 @@ class App {
                 case 'Comma':
                     e.preventDefault();
                     this.playerA.frameStep(shift ? -5 : -1);
-                    if (this.syncController.enabled) this.playerB.frameStep(shift ? -5 : -1);
                     break;
                 case 'Period':
                     e.preventDefault();
                     this.playerA.frameStep(shift ? 5 : 1);
-                    if (this.syncController.enabled) this.playerB.frameStep(shift ? 5 : 1);
                     break;
                     
-                case 'KeyS':
-                    if (!e.ctrlKey && !e.metaKey) {
-                        e.preventDefault();
-                        this.syncController.toggle();
-                    }
-                    break;
                 case 'KeyR':
                     if (!e.ctrlKey && !e.metaKey) {
                         e.preventDefault();
                         this.playerA.goToStart();
-                        if (this.syncController.enabled) this.playerB.goToStart();
                     }
                     break;
             }
@@ -675,7 +957,7 @@ class App {
     }
 
     handleStateChange(state, player) {
-        if (player.key === 'A') this.syncController.syncPlayState(state);
+        // State change handler (can be used for future features)
     }
 
     handlePlayerReady(player) {
@@ -685,11 +967,6 @@ class App {
     handleCommentClick(comment) {
         const player = comment.playerKey === 'A' ? this.playerA : this.playerB;
         player.seekTo(comment.timestamp);
-        
-        if (this.syncController.enabled && comment.playerKey === 'A') {
-            this.syncController.handleSeek(comment.timestamp);
-        }
-        
         Toast.show(`${this.formatTime(comment.timestamp)} へジャンプ`, 'success');
     }
 

@@ -65,6 +65,27 @@ class CommentsController {
         this.elements.clearCommentsBtn.addEventListener('click', () => {
             this.confirmClearComments();
         });
+        
+        // Edit modal events
+        document.getElementById('saveEditComment')?.addEventListener('click', () => {
+            this.saveEditComment();
+        });
+        document.getElementById('cancelEditComment')?.addEventListener('click', () => {
+            this.closeEditModal();
+        });
+        document.getElementById('closeEditCommentModal')?.addEventListener('click', () => {
+            this.closeEditModal();
+        });
+        document.getElementById('editCommentModal')?.querySelector('.modal-backdrop')?.addEventListener('click', () => {
+            this.closeEditModal();
+        });
+        
+        // Ctrl+Enter to save in edit modal
+        document.getElementById('editCommentText')?.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                this.saveEditComment();
+            }
+        });
     }
 
     loadComments() {
@@ -102,33 +123,32 @@ class CommentsController {
     }
 
     /**
-     * コメントを投稿
+     * コメントを投稿（空でもOK - タイムスタンプだけ記録）
      */
     postComment() {
         const text = this.elements.commentInput.value.trim();
-        
-        if (!text) {
-            Toast.show('コメントを入力してください', 'warning');
-            return;
-        }
 
         // Get start positions from sync panel
         const startPosA = document.getElementById('playerAStartPos')?.value || '0:00';
         const startPosB = document.getElementById('playerBStartPos')?.value || '0:00';
 
-        // Get markers from players
+        // Get current times from BOTH players
         const playerA = window.app?.playerA;
         const playerB = window.app?.playerB;
+        
+        const timestampA = playerA?.getCurrentTime() ?? 0;
+        const timestampB = playerB?.getCurrentTime() ?? 0;
 
         const comment = {
             id: Storage.generateId(),
-            videoUrl: '', // 将来的に動画URLを保存する場合用
+            videoUrl: '',
             timestamp: this.currentTimestamp,
-            comment: text,
+            timestampA: timestampA,
+            timestampB: timestampB,
+            comment: text, // Can be empty
             playerKey: this.selectedPlayerKey,
             startPosA: startPosA,
             startPosB: startPosB,
-            // Auto-capture markers
             markerA: {
                 start: playerA?.startMarker ?? null,
                 end: playerA?.endMarker ?? null
@@ -141,14 +161,71 @@ class CommentsController {
         };
 
         this.comments.push(comment);
-        this.comments.sort((a, b) => a.timestamp - b.timestamp);
+        this.comments.sort((a, b) => (a.timestampA || a.timestamp) - (b.timestampA || b.timestamp));
         this.saveComments();
         this.renderComments();
 
         // 入力欄をクリア
         this.elements.commentInput.value = '';
         
-        Toast.show('コメントを投稿しました', 'success');
+        Toast.show('マーク追加', 'success');
+    }
+
+    /**
+     * コメントを編集（カスタムモーダル使用）
+     * @param {string} id - コメントID
+     */
+    editComment(id) {
+        const comment = this.comments.find(c => c.id === id);
+        if (!comment) return;
+        
+        this.editingCommentId = id;
+        
+        const modal = document.getElementById('editCommentModal');
+        const textarea = document.getElementById('editCommentText');
+        
+        if (!modal || !textarea) {
+            // Fallback to prompt
+            const newText = prompt('コメントを編集:', comment.comment || '');
+            if (newText !== null) {
+                comment.comment = newText.trim();
+                this.saveComments();
+                this.renderComments();
+                Toast.show('コメントを更新しました', 'success');
+            }
+            return;
+        }
+        
+        textarea.value = comment.comment || '';
+        modal.classList.add('open');
+        textarea.focus();
+    }
+    
+    /**
+     * コメント編集を保存
+     */
+    saveEditComment() {
+        if (!this.editingCommentId) return;
+        
+        const comment = this.comments.find(c => c.id === this.editingCommentId);
+        if (!comment) return;
+        
+        const textarea = document.getElementById('editCommentText');
+        comment.comment = textarea.value.trim();
+        
+        this.saveComments();
+        this.renderComments();
+        this.closeEditModal();
+        Toast.show('コメントを更新しました', 'success');
+    }
+    
+    /**
+     * 編集モーダルを閉じる
+     */
+    closeEditModal() {
+        const modal = document.getElementById('editCommentModal');
+        modal?.classList.remove('open');
+        this.editingCommentId = null;
     }
 
     /**
@@ -225,26 +302,45 @@ class CommentsController {
                             startPosBInput.value = comment.startPosB;
                         }
                         
-                        // Restore markers to players
+                        // Restore markers and seek BOTH players
                         const playerA = window.app?.playerA;
                         const playerB = window.app?.playerB;
                         
-                        if (playerA && comment.markerA) {
-                            playerA.startMarker = comment.markerA.start;
-                            playerA.endMarker = comment.markerA.end;
-                            playerA.updateMarkerDisplay();
+                        if (playerA) {
+                            if (comment.markerA) {
+                                playerA.startMarker = comment.markerA.start;
+                                playerA.endMarker = comment.markerA.end;
+                                playerA.updateMarkerDisplay();
+                            }
+                            // Seek to saved timestamp
+                            const tsA = comment.timestampA ?? comment.timestamp;
+                            playerA.seekTo(tsA);
                         }
-                        if (playerB && comment.markerB) {
-                            playerB.startMarker = comment.markerB.start;
-                            playerB.endMarker = comment.markerB.end;
-                            playerB.updateMarkerDisplay();
+                        if (playerB) {
+                            if (comment.markerB) {
+                                playerB.startMarker = comment.markerB.start;
+                                playerB.endMarker = comment.markerB.end;
+                                playerB.updateMarkerDisplay();
+                            }
+                            // Seek to saved timestamp
+                            if (comment.timestampB !== undefined) {
+                                playerB.seekTo(comment.timestampB);
+                            }
                         }
                         
-                        this.onCommentClick(comment);
-                        Toast.show('設定を復元しました', 'info');
+                        Toast.show('両プレイヤーの位置を復元', 'info');
                     }
                 });
             }
+        });
+
+        // 編集ボタンのイベント
+        list.querySelectorAll('.comment-edit').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = btn.closest('.comment-item').dataset.id;
+                this.editComment(id);
+            });
         });
 
         // 削除ボタンのイベント
@@ -266,31 +362,38 @@ class CommentsController {
         const badgeClass = comment.playerKey === 'A' ? 'badge-a' : 'badge-b';
         const playerClass = comment.playerKey === 'A' ? 'player-a' : 'player-b';
         
-        // Show start positions
-        const startPosInfo = (comment.startPosA || comment.startPosB) 
-            ? `<div class="comment-startpos">開始 A:${comment.startPosA || '0:00'} B:${comment.startPosB || '0:00'}</div>`
-            : '';
+        // Show both player timestamps
+        const timeA = comment.timestampA !== undefined ? this.formatTime(comment.timestampA) : this.formatTime(comment.timestamp);
+        const timeB = comment.timestampB !== undefined ? this.formatTime(comment.timestampB) : '--';
         
         // Show markers if available
         let markerInfo = '';
         if (comment.markerA || comment.markerB) {
             const aStart = comment.markerA?.start !== null ? this.formatTimeShort(comment.markerA.start) : '--';
-            const aEnd = comment.markerA?.end !== null ? this.formatTimeShort(comment.markerA.end) : '--';
             const bStart = comment.markerB?.start !== null ? this.formatTimeShort(comment.markerB.start) : '--';
-            const bEnd = comment.markerB?.end !== null ? this.formatTimeShort(comment.markerB.end) : '--';
-            markerInfo = `<div class="comment-markers">区間 A:${aStart}~${aEnd} B:${bStart}~${bEnd}</div>`;
+            markerInfo = `<div class="comment-markers">区間 A:${aStart}― B:${bStart}―</div>`;
         }
         
+        // Show comment text or placeholder (with Markdown support)
+        const commentText = comment.comment 
+            ? this.parseMarkdown(comment.comment) 
+            : '<span class="comment-empty-text">（メモなし）</span>';
+        
         return `
-            <li class="comment-item ${playerClass}" data-id="${comment.id}" data-timestamp="${comment.timestamp}">
+            <li class="comment-item ${playerClass}" data-id="${comment.id}" data-timestamp="${comment.timestamp}" data-timestamp-a="${comment.timestampA || comment.timestamp}" data-timestamp-b="${comment.timestampB || 0}">
                 <span class="comment-badge ${badgeClass}">${comment.playerKey}</span>
                 <div class="comment-content">
-                    <div class="comment-time">${this.formatTime(comment.timestamp)}</div>
-                    ${startPosInfo}
+                    <div class="comment-timestamps">
+                        <span class="ts-label ts-a">A</span><span class="ts-time">${timeA}</span>
+                        <span class="ts-label ts-b">B</span><span class="ts-time">${timeB}</span>
+                    </div>
                     ${markerInfo}
-                    <div class="comment-text">${this.escapeHtml(comment.comment)}</div>
+                    <div class="comment-text">${commentText}</div>
                 </div>
-                <button class="comment-delete" title="削除">🗑️</button>
+                <div class="comment-actions">
+                    <button class="comment-edit" title="編集">✏️</button>
+                    <button class="comment-delete" title="削除">🗑️</button>
+                </div>
             </li>
         `;
     }
@@ -340,6 +443,37 @@ class CommentsController {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+    
+    /**
+     * 簡易Markdownをパース
+     * @param {string} text 
+     * @returns {string}
+     */
+    parseMarkdown(text) {
+        if (!text) return '';
+        
+        // First escape HTML
+        let html = this.escapeHtml(text);
+        
+        // Convert line breaks to <br>
+        html = html.replace(/\n/g, '<br>');
+        
+        // Bold: **text** or __text__
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        
+        // Italic: *text* or _text_
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+        
+        // Code: `text`
+        html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+        
+        // Strikethrough: ~~text~~
+        html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+        
+        return html;
     }
 }
 
