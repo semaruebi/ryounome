@@ -168,7 +168,31 @@ class CommentsController {
         // 入力欄をクリア
         this.elements.commentInput.value = '';
         
-        Toast.show('マーク追加', 'success');
+        // Success animation (Peak-End Rule - memorable moment)
+        this.showAddSuccessAnimation();
+        Toast.show('✨ マーク追加！', 'success');
+    }
+    
+    /**
+     * マーク追加時の成功アニメーション（ピーク・エンドの法則）
+     */
+    showAddSuccessAnimation() {
+        // Animate the post button
+        const btn = this.elements.postCommentBtn;
+        btn?.classList.add('success-pulse');
+        setTimeout(() => btn?.classList.remove('success-pulse'), 600);
+        
+        // Flash effect on the newest comment
+        setTimeout(() => {
+            const list = this.elements.commentsList;
+            const items = list?.querySelectorAll('.comment-item');
+            if (items?.length > 0) {
+                // Find the newly added comment (sorted by timestamp, so need to find it)
+                const newest = list.querySelector('.comment-item');
+                newest?.classList.add('comment-new');
+                setTimeout(() => newest?.classList.remove('comment-new'), 1000);
+            }
+        }, 100);
     }
 
     /**
@@ -260,10 +284,25 @@ class CommentsController {
     }
 
     /**
+     * コメント数バッジを更新（ツァイガルニク効果 - 進捗の可視化）
+     */
+    updateCommentCountBadge() {
+        const badge = document.getElementById('commentCountBadge');
+        if (badge) {
+            const count = this.comments.length;
+            badge.textContent = count;
+            badge.classList.toggle('has-comments', count > 0);
+        }
+    }
+
+    /**
      * コメントリストをレンダリング
      */
     renderComments() {
         const list = this.elements.commentsList;
+        
+        // Update comment count badge
+        this.updateCommentCountBadge();
         
         // フィルタリング
         let filteredComments = this.comments;

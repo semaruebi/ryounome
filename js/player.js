@@ -702,6 +702,27 @@ class VideoPlayer {
         return null;
     }
 
+    // Show loading state in placeholder (Labor Illusion)
+    showLoadingState(message = '読み込み中...') {
+        this.elements.placeholder.style.display = 'flex';
+        this.elements.placeholder.innerHTML = `
+            <div class="placeholder-content loading">
+                <div class="loading-spinner"></div>
+                <p class="loading-message">${message}</p>
+            </div>
+        `;
+    }
+    
+    // Reset placeholder to default state
+    resetPlaceholder() {
+        this.elements.placeholder.innerHTML = `
+            <div class="placeholder-content">
+                <span class="placeholder-icon">🎬</span>
+                <p>動画をロード</p>
+            </div>
+        `;
+    }
+
     loadYoutubeVideo(videoId, originalUrl) {
         this.cleanup();
         this.type = 'youtube';
@@ -713,7 +734,8 @@ class VideoPlayer {
             sourceType: 'youtube'
         });
 
-        this.elements.placeholder.style.display = 'none';
+        // Show loading state (Labor Illusion - show work being done)
+        this.showLoadingState('YouTube動画を取得中...');
         this.elements.video.style.display = 'none';
         
         this.recreateYoutubeContainer();
@@ -724,14 +746,16 @@ class VideoPlayer {
         }
 
         if (typeof YT === 'undefined' || !YT.Player) {
-            Toast.show('YouTube API 読み込み中...', 'info');
+            this.showLoadingState('YouTube API を準備中...');
             const check = setInterval(() => {
                 if (typeof YT !== 'undefined' && YT.Player) {
                     clearInterval(check);
+                    this.showLoadingState('プレイヤーを初期化中...');
                     this.createYoutubePlayer(videoId);
                 }
             }, 100);
         } else {
+            this.showLoadingState('プレイヤーを初期化中...');
             this.createYoutubePlayer(videoId);
         }
     }
@@ -777,6 +801,8 @@ class VideoPlayer {
 
     handleYoutubeReady() {
         this.isReady = true;
+        this.elements.placeholder.style.display = 'none';
+        this.resetPlaceholder(); // Reset for next time
         this.startTimeUpdateLoop();
         
         const duration = this.getDuration();
@@ -883,7 +909,8 @@ class VideoPlayer {
             hasFileHandle: false
         });
 
-        this.elements.placeholder.style.display = 'none';
+        // Show loading state (Labor Illusion)
+        this.showLoadingState('動画ファイルを読み込み中...');
         this.elements.youtubeContainer.style.display = 'none';
         this.elements.video.style.display = 'block';
 
@@ -898,6 +925,10 @@ class VideoPlayer {
     handleVideoLoaded() {
         this.isReady = true;
         
+        // Hide loading state
+        this.elements.placeholder.style.display = 'none';
+        this.resetPlaceholder();
+        
         const duration = this.getDuration();
         if (this.elements.durationDisplay) {
             this.elements.durationDisplay.textContent = this.formatTimeShort(duration);
@@ -909,7 +940,7 @@ class VideoPlayer {
         setTimeout(() => this.generateThumbnailStrip(), 300);
         
         this.onReady(this);
-        Toast.show(`${this.elements.nameInput?.value || 'Player'}: 読込完了`, 'success');
+        Toast.show(`${this.elements.nameInput?.value || 'Player'}: 読込完了 ✓`, 'success');
     }
 
     handleTimeUpdate() {

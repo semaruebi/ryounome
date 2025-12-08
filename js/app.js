@@ -29,6 +29,7 @@ class App {
         this.syncController = null;
         this.commentsController = null;
         this.sidebarOpen = true;
+        this.focusedPlayer = null; // null = both, 'A' = playerA only, 'B' = playerB only
         
         window.onYouTubeIframeAPIReady = () => {
             console.log('YouTube API Ready');
@@ -221,7 +222,29 @@ class App {
         
         this.isModified = false;
         this.updateProjectNameDisplay();
-        Toast.show(`"${name}" を保存しました`, 'success');
+        
+        // Success animation (Peak-End Rule)
+        this.showSaveSuccessAnimation();
+        Toast.show(`✨ "${name}" を保存しました！`, 'success', 3000);
+    }
+    
+    /**
+     * プロジェクト保存成功時のアニメーション（ピーク・エンドの法則）
+     */
+    showSaveSuccessAnimation() {
+        // Flash effect on project name
+        const nameDisplay = this.projectNameDisplay;
+        if (nameDisplay) {
+            nameDisplay.classList.add('save-success');
+            setTimeout(() => nameDisplay.classList.remove('save-success'), 1000);
+        }
+        
+        // Flash effect on save button
+        const saveBtn = document.getElementById('saveProjectBtn');
+        if (saveBtn) {
+            saveBtn.classList.add('success-pulse');
+            setTimeout(() => saveBtn.classList.remove('success-pulse'), 600);
+        }
     }
 
     showLoadProjectModal() {
@@ -655,6 +678,73 @@ class App {
             }
             e.target.value = '';
         });
+        
+        // Player focus functionality
+        this.initPlayerFocus();
+    }
+    
+    initPlayerFocus() {
+        const playerContainerA = document.getElementById('playerAContainer');
+        const playerContainerB = document.getElementById('playerBContainer');
+        
+        // Click on player A container to focus/unfocus
+        playerContainerA?.addEventListener('click', (e) => {
+            // Don't trigger if clicking on controls/buttons
+            if (e.target.closest('button, input, select, .controls, .player-controls, .url-input-container, .player-footer')) {
+                return;
+            }
+            this.togglePlayerFocus('A');
+        });
+        
+        // Click on player B container to focus/unfocus
+        playerContainerB?.addEventListener('click', (e) => {
+            // Don't trigger if clicking on controls/buttons
+            if (e.target.closest('button, input, select, .controls, .player-controls, .url-input-container, .player-footer')) {
+                return;
+            }
+            this.togglePlayerFocus('B');
+        });
+        
+        // Click outside players to unfocus
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#playerAContainer, #playerBContainer') && this.focusedPlayer !== null) {
+                this.setPlayerFocus(null);
+            }
+        });
+    }
+    
+    togglePlayerFocus(playerKey) {
+        if (this.focusedPlayer === playerKey) {
+            // Same player clicked again - unfocus
+            this.setPlayerFocus(null);
+        } else {
+            // Different player or no focus - set focus
+            this.setPlayerFocus(playerKey);
+        }
+    }
+    
+    setPlayerFocus(playerKey) {
+        this.focusedPlayer = playerKey;
+        
+        const playerA = document.getElementById('playerAContainer');
+        const playerB = document.getElementById('playerBContainer');
+        
+        // Remove all focus classes
+        playerA?.classList.remove('player-focused', 'player-unfocused');
+        playerB?.classList.remove('player-focused', 'player-unfocused');
+        
+        if (playerKey === null) {
+            // No focus - both active
+            Toast.show('両方のプレイヤーを操作', 'info', 1500);
+        } else if (playerKey === 'A') {
+            playerA?.classList.add('player-focused');
+            playerB?.classList.add('player-unfocused');
+            Toast.show('プレイヤーAをフォーカス', 'info', 1500);
+        } else if (playerKey === 'B') {
+            playerB?.classList.add('player-focused');
+            playerA?.classList.add('player-unfocused');
+            Toast.show('プレイヤーBをフォーカス', 'info', 1500);
+        }
     }
 
     initSidebar() {
@@ -893,50 +983,79 @@ class App {
 
             const shift = e.shiftKey;
             
+            // Get target player(s) based on focus state
+            const getTargetPlayers = () => {
+                if (this.focusedPlayer === 'A') return [this.playerA];
+                if (this.focusedPlayer === 'B') return [this.playerB];
+                return [this.playerA, this.playerB]; // Both when no focus
+            };
+            
             switch (e.code) {
                 case 'Space':
                     e.preventDefault();
-                    this.playerA.togglePlayPause();
+                    const players = getTargetPlayers();
+                    if (players.length === 2) {
+                        // Both players - toggle both
+                        const isPlaying = this.playerA.isPlaying() || this.playerB.isPlaying();
+                        if (isPlaying) {
+                            this.playerA.pause();
+                            this.playerB.pause();
+                        } else {
+                            this.playerA.play();
+                            this.playerB.play();
+                        }
+                    } else {
+                        // Single player
+                        players[0].togglePlayPause();
+                    }
                     break;
                     
                 // Arrow keys: seconds
                 case 'ArrowLeft':
                     e.preventDefault();
-                    this.playerA.pause();
-                    if (shift) {
-                        // Shift + Left: -5 seconds
-                        this.playerA.seekTo(this.playerA.getCurrentTime() - 5);
-                    } else {
-                        // Left: -1 second
-                        this.playerA.seekTo(this.playerA.getCurrentTime() - 1);
-                    }
+                    getTargetPlayers().forEach(player => {
+                        player.pause();
+                        if (shift) {
+                            player.seekTo(player.getCurrentTime() - 5);
+                        } else {
+                            player.seekTo(player.getCurrentTime() - 1);
+                        }
+                    });
                     break;
                 case 'ArrowRight':
                     e.preventDefault();
-                    this.playerA.pause();
-                    if (shift) {
-                        // Shift + Right: +5 seconds
-                        this.playerA.seekTo(this.playerA.getCurrentTime() + 5);
-                    } else {
-                        // Right: +1 second
-                        this.playerA.seekTo(this.playerA.getCurrentTime() + 1);
-                    }
+                    getTargetPlayers().forEach(player => {
+                        player.pause();
+                        if (shift) {
+                            player.seekTo(player.getCurrentTime() + 5);
+                        } else {
+                            player.seekTo(player.getCurrentTime() + 1);
+                        }
+                    });
                     break;
                     
                 // , . keys: frames (VidTimer style)
                 case 'Comma':
                     e.preventDefault();
-                    this.playerA.frameStep(shift ? -5 : -1);
+                    getTargetPlayers().forEach(player => player.frameStep(shift ? -5 : -1));
                     break;
                 case 'Period':
                     e.preventDefault();
-                    this.playerA.frameStep(shift ? 5 : 1);
+                    getTargetPlayers().forEach(player => player.frameStep(shift ? 5 : 1));
                     break;
                     
                 case 'KeyR':
                     if (!e.ctrlKey && !e.metaKey) {
                         e.preventDefault();
-                        this.playerA.goToStart();
+                        getTargetPlayers().forEach(player => player.goToStart());
+                    }
+                    break;
+                    
+                // Escape to unfocus
+                case 'Escape':
+                    if (this.focusedPlayer !== null) {
+                        e.preventDefault();
+                        this.setPlayerFocus(null);
                     }
                     break;
             }
